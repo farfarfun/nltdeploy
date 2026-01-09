@@ -65,20 +65,35 @@ pip install .
 
 ### Python 环境快速设置
 
-fundeploy 提供了便捷的脚本来使用 uv 快速创建 Python 环境，并统一安装到 `~/opt/` 目录：
+fundeploy 提供了便捷的命令行工具来使用 uv 快速创建 Python 环境，并统一安装到 `~/opt/` 目录：
+
+#### 使用 CLI 命令（推荐）
 
 ```bash
-# Linux/macOS - 安装 Python 3.12
-./scripts/setup_python_env.sh 3.12
+# 创建 Python 3.12 环境
+fundeploy create py312
 
-# Windows PowerShell - 安装 Python 3.12
-.\scripts\setup_python_env.ps1 -PythonVersion 3.12
+# 创建 Python 3.11 环境
+fundeploy create py311
+
+# 创建 Python 3.10 环境
+fundeploy create py310
 
 # 激活环境（Linux/macOS）
 source ~/opt/py312/bin/activate
 
 # 激活环境（Windows）
 ~\opt\py312\Scripts\Activate.ps1
+```
+
+#### 使用脚本（备选方式）
+
+```bash
+# Linux/macOS
+./scripts/setup_python_env.sh 3.12
+
+# Windows PowerShell
+.\scripts\setup_python_env.ps1 -PythonVersion 3.12
 ```
 
 Python 环境按版本号安装在 `~/opt/` 目录下：
@@ -91,6 +106,9 @@ Python 环境按版本号安装在 `~/opt/` 目录下：
 ### 基本命令
 
 ```bash
+# 创建 Python 环境
+fundeploy create py312
+
 # 初始化部署环境
 fundeploy init
 
