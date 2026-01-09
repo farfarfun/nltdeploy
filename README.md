@@ -63,6 +63,31 @@ pip install .
 
 ## 📖 使用指南
 
+### Python 环境快速设置
+
+fundeploy 提供了便捷的脚本来使用 uv 快速创建 Python 环境，并统一安装到 `~/opt/` 目录：
+
+```bash
+# Linux/macOS - 安装 Python 3.12
+./scripts/setup_python_env.sh 3.12
+
+# Windows PowerShell - 安装 Python 3.12
+.\scripts\setup_python_env.ps1 -PythonVersion 3.12
+
+# 激活环境（Linux/macOS）
+source ~/opt/py312/bin/activate
+
+# 激活环境（Windows）
+~\opt\py312\Scripts\Activate.ps1
+```
+
+Python 环境按版本号安装在 `~/opt/` 目录下：
+- Python 3.12 → `~/opt/py312`
+- Python 3.11 → `~/opt/py311`
+- Python 3.10 → `~/opt/py310`
+
+详细说明请参见 [scripts/README.md](scripts/README.md)
+
 ### 基本命令
 
 ```bash
@@ -255,7 +280,10 @@ fundeploy/
 │       ├── config/        # 配置管理
 │       ├── hooks/         # 钩子系统
 │       └── utils/         # 工具函数
-├── scripts/               # 部署脚本
+├── scripts/               # 部署和环境设置脚本
+│   ├── setup_python_env.sh      # Python 环境设置脚本 (Linux/macOS)
+│   ├── setup_python_env.ps1     # Python 环境设置脚本 (Windows)
+│   └── README.md                # 脚本使用说明
 ├── templates/             # 配置模板
 ├── examples/              # 使用示例
 ├── tests/                 # 测试文件
