@@ -1,391 +1,262 @@
-# fundeploy
+# Fundeploy - Python 环境自动化部署工具
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+这是一个 Python 环境自动化部署工具集，提供完整的 Python 开发环境自动化配置方案。
 
-fundeploy 是一个快速部署环境的脚本工具集，旨在简化开发、测试和生产环境的部署流程。它提供了一系列自动化脚本和工具，帮助开发者快速搭建和配置各种运行环境。
+## 项目概述
 
-## ✨ 特性
+本项目提供了一套完整的 Python 开发环境自动化配置方案，帮助开发者快速搭建和配置 Python 开发环境。
 
-- 🚀 **快速部署**: 一键部署开发、测试、生产环境
-- 🔧 **多环境支持**: 支持多种操作系统和云平台
-- 📦 **依赖管理**: 自动安装和配置项目依赖
-- 🐳 **容器化支持**: 集成 Docker 和 Kubernetes 部署方案
-- 🔐 **安全配置**: 内置安全最佳实践和配置模板
-- 📋 **配置管理**: 统一管理不同环境的配置文件
-- 🤖 **自动化流程**: 支持 CI/CD 集成和自动化部署
-- 🎯 **灵活扩展**: 易于定制和扩展的脚本架构
-- ⏬ **多种安装方式**: 支持全局安装（通过 curl）或 pip 安装，无需预装 Python
+### 主要功能
 
-## 📋 系统要求
+- ✅ **自动创建 Python 虚拟环境**：支持 Python 3.8-3.14 多个版本
+- ✅ **自动安装基础包**：预装常用开发工具包
+- ✅ **智能 pip 源配置**：自动检测并配置最快的 pip 镜像源
+- ✅ **网络连通性检测**：自动测试各镜像源的可用性和下载速度
+- ✅ **交互式操作**：友好的交互界面，支持非交互模式
+- ✅ **自动备份配置**：配置前自动备份现有配置
+- ✅ **保留现有配置**：自动读取并保留本地已有的 pip 源配置（包括带认证的源）
 
-- Python 3.9 或更高版本
-- Bash/Zsh（Unix-like 系统）
-- 根据部署目标可能需要：
-  - Docker
-  - Kubernetes
-  - Git
-  - 特定云平台 CLI 工具
-
-## 🚀 安装
-
-fundeploy 支持多种安装方式，您可以选择全局安装或通过 pip 安装。
-
-### 全局安装（推荐）
-
-使用独立安装脚本进行全局安装，无需预先安装 Python 或 pip：
-
-```bash
-# macOS 和 Linux
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/setup_python_env.sh | sh
-```
-
-```bash
-# Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://raw.githubusercontent.com/farfarfun/fundeploy/master/install.ps1 | iex"
-```
-
-### 通过 pip 安装
-
-如果您已经有 Python 环境，可以直接使用 pip 安装：
-
-```bash
-pip install fundeploy
-```
-
-### 从源码安装
-
-```bash
-git clone https://github.com/farfarfun/fundeploy.git
-cd fundeploy
-pip install .
-```
-
-## 📖 使用指南
-
-### Python 环境快速设置
-
-fundeploy 提供了便捷的命令行工具来使用 uv 快速创建 Python 环境，并统一安装到 `~/opt/` 目录：
-
-#### 使用 CLI 命令（推荐）
-
-```bash
-# 创建 Python 3.12 环境
-fundeploy create py312
-
-# 创建 Python 3.11 环境
-fundeploy create py311
-
-# 创建 Python 3.10 环境
-fundeploy create py310
-
-# 激活环境（Linux/macOS）
-source ~/opt/py312/bin/activate
-
-# 激活环境（Windows）
-~\opt\py312\Scripts\Activate.ps1
-```
-
-#### 使用脚本（备选方式）
-
-```bash
-# Linux/macOS
-./scripts/setup_python_env.sh 3.12
-
-# Windows PowerShell
-.\scripts\setup_python_env.ps1 -PythonVersion 3.12
-```
-
-Python 环境按版本号安装在 `~/opt/` 目录下：
-- Python 3.12 → `~/opt/py312`
-- Python 3.11 → `~/opt/py311`
-- Python 3.10 → `~/opt/py310`
-
-详细说明请参见 [scripts/README.md](scripts/README.md)
-
-### 基本命令
-
-```bash
-# 创建 Python 环境
-fundeploy create py312
-
-# 初始化部署环境
-fundeploy init
-
-# 部署到开发环境
-fundeploy deploy --env dev
-
-# 部署到生产环境
-fundeploy deploy --env prod
-
-# 查看部署状态
-fundeploy status
-
-# 回滚到上一个版本
-fundeploy rollback
-```
-
-### 环境配置
-
-创建配置文件 `deploy.yaml`：
-
-```yaml
-# 部署配置示例
-project_name: my-project
-environments:
-  dev:
-    type: local
-    python_version: "3.9"
-    install_requirements: true
-    
-  test:
-    type: docker
-    image: python:3.9-slim
-    registry: docker.io
-    
-  prod:
-    type: kubernetes
-    cluster: production-cluster
-    namespace: default
-    replicas: 3
-
-# 依赖配置
-dependencies:
-  - python-packages:
-      - flask
-      - gunicorn
-  - system-packages:
-      - nginx
-      - redis
-
-# 环境变量
-env_vars:
-  DATABASE_URL: "${DB_URL}"
-  API_KEY: "${API_KEY}"
-```
-
-### Docker 部署
-
-```bash
-# 构建 Docker 镜像
-fundeploy docker build
-
-# 推送到镜像仓库
-fundeploy docker push
-
-# 运行容器
-fundeploy docker run --env dev
-
-# 停止容器
-fundeploy docker stop
-```
-
-### Kubernetes 部署
-
-```bash
-# 应用 Kubernetes 配置
-fundeploy k8s apply
-
-# 查看部署状态
-fundeploy k8s status
-
-# 扩缩容
-fundeploy k8s scale --replicas 5
-
-# 查看日志
-fundeploy k8s logs
-```
-
-### 高级功能
-
-#### 1. 多环境配置管理
-
-```bash
-# 设置环境变量
-fundeploy config set --env prod DATABASE_URL "postgresql://..."
-
-# 查看配置
-fundeploy config get --env prod
-
-# 导入配置文件
-fundeploy config import config.env
-```
-
-#### 2. 脚本钩子
-
-在 `deploy.yaml` 中配置部署钩子：
-
-```yaml
-hooks:
-  pre_deploy:
-    - "npm run build"
-    - "pytest tests/"
-  post_deploy:
-    - "fundeploy notify --message 'Deployment completed'"
-  pre_rollback:
-    - "fundeploy backup create"
-```
-
-#### 3. 自定义部署脚本
-
-```python
-# custom_deploy.py
-from fundeploy import Deployer
-
-class MyDeployer(Deployer):
-    def pre_deploy(self):
-        # 部署前的自定义逻辑
-        self.run_tests()
-        self.backup_database()
-    
-    def deploy(self):
-        # 自定义部署逻辑
-        self.install_dependencies()
-        self.migrate_database()
-        self.restart_services()
-    
-    def post_deploy(self):
-        # 部署后的自定义逻辑
-        self.health_check()
-        self.send_notification()
-
-# 使用自定义部署器
-deployer = MyDeployer(config_file="deploy.yaml")
-deployer.run(environment="prod")
-```
-
-#### 4. CI/CD 集成
-
-GitHub Actions 示例：
-
-```yaml
-# .github/workflows/deploy.yml
-name: Deploy
-
-on:
-  push:
-    branches: [main]
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.9'
-      
-      - name: Install fundeploy
-        run: pip install fundeploy
-      
-      - name: Deploy to production
-        run: fundeploy deploy --env prod
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
-          API_KEY: ${{ secrets.API_KEY }}
-```
-
-## 📁 项目结构
+## 目录结构
 
 ```
 fundeploy/
-├── src/
-│   └── fundeploy/
-│       ├── core/          # 核心部署逻辑
-│       ├── deployers/     # 各种部署器实现
-│       ├── config/        # 配置管理
-│       ├── hooks/         # 钩子系统
-│       └── utils/         # 工具函数
-├── scripts/               # 部署和环境设置脚本
-│   ├── setup_python_env.sh      # Python 环境设置脚本 (Linux/macOS)
-│   ├── setup_python_env.ps1     # Python 环境设置脚本 (Windows)
-│   └── README.md                # 脚本使用说明
-├── templates/             # 配置模板
-├── examples/              # 使用示例
-├── tests/                 # 测试文件
-├── deploy.yaml            # 部署配置
-└── README.md             # 项目文档
+├── README.md                                    # 项目主说明文档
+├── test-curl-mode.sh                           # curl 模式测试脚本
+└── scripts/
+    ├── 01-configure-pip-sources/               # pip 源配置脚本
+    │   ├── deploy.sh                           # 主脚本
+    │   └── readme.md                           # 详细说明文档
+    └── 02-create-python-env/                   # Python 环境创建脚本
+        ├── deploy.sh                           # 主脚本
+        └── readme.md                           # 详细说明文档
 ```
 
-## 🔧 支持的部署目标
+## 快速开始
 
-### 操作系统
-- ✅ Linux (Ubuntu, CentOS, Debian)
-- ✅ macOS
-- ✅ Windows (WSL)
-
-### 云平台
-- ✅ AWS (EC2, ECS, Lambda)
-- ✅ Google Cloud Platform
-- ✅ Azure
-- ✅ 阿里云
-- ✅ 腾讯云
-- ✅ Heroku
-- ✅ DigitalOcean
-
-### 容器平台
-- ✅ Docker
-- ✅ Kubernetes
-- ✅ Docker Swarm
-- ✅ OpenShift
-
-## 🤝 贡献指南
-
-我们欢迎任何形式的贡献！请遵循以下步骤：
-
-1. Fork 本仓库
-2. 创建您的特性分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交您的更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 打开一个 Pull Request
-
-### 开发环境设置
+### 1. 配置 pip 源（推荐先执行）
 
 ```bash
-# 克隆仓库
-git clone https://github.com/farfarfun/fundeploy.git
-cd fundeploy
+# 进入脚本目录
+cd scripts/01-configure-pip-sources
 
-# 安装开发依赖
-pip install -e ".[dev]"
+# 运行脚本
+./deploy.sh
 
-# 运行测试
-pytest tests/
-
-# 代码格式化
-ruff format .
-ruff check . --fix
+# 或通过 curl 执行
+curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
-## 📄 许可证
+### 2. 创建 Python 环境
 
-本项目采用 [MIT 许可证](LICENSE)。
+```bash
+# 进入脚本目录
+cd scripts/02-create-python-env
 
-## 🔗 相关链接
+# 运行脚本
+./deploy.sh
 
-- [GitHub 仓库](https://github.com/farfarfun/fundeploy)
-- [PyPI 页面](https://pypi.org/project/fundeploy/)
-- [问题反馈](https://github.com/farfarfun/fundeploy/issues)
-- [变更日志](CHANGELOG.md)
+# 或通过 curl 执行
+curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash
+```
 
-## 🌟 相关项目
+## 脚本说明
 
-fundeploy 是 farfarfun 工具生态系统的一部分，您可能还对以下项目感兴趣：
+### 1. configure-pip-sources - pip 源自动配置
 
-- **[funbuild](https://github.com/farfarfun/funbuild)** - Python 项目构建和管理工具
-- **[fundrive](https://github.com/farfarfun/fundrive)** - 统一的云存储操作接口
-- **[fundata](https://github.com/farfarfun/fundata)** - 数据处理工具包
+**位置**：`scripts/01-configure-pip-sources/deploy.sh`
 
-## 👥 维护者
+**功能**：自动检测网络连通性并配置常用的 pip 镜像源。
 
-- **farfarfun** - [farfarfun@qq.com](mailto:farfarfun@qq.com)
+**主要特性**：
+- 自动检测所有预定义的 pip 镜像源
+- 测试每个源的响应延迟和实际下载速度
+- 按下载速度自动排序，最快的源作为主源
+- 自动读取并保留本地已有的 pip 源配置
+- 支持带认证信息的源
 
-## 🙏 致谢
+**详细文档**：[查看完整说明](scripts/01-configure-pip-sources/readme.md)
 
-感谢所有为 fundeploy 项目做出贡献的开发者和用户！
+**快速使用**：
+```bash
+cd scripts/01-configure-pip-sources
+./deploy.sh
+```
 
----
+### 2. create-python-env - Python 环境创建
 
-如果您觉得 fundeploy 对您有帮助，请给我们一个 ⭐️！
+**位置**：`scripts/02-create-python-env/deploy.sh`
+
+**功能**：使用 `uv` 创建 Python 虚拟环境并安装基础包。
+
+**主要特性**：
+- 支持 Python 3.8-3.14 多个版本
+- 自动安装 uv（如果未安装）
+- 交互式版本选择界面
+- 自动安装基础包：`pip`、`funutil`、`funbuild`、`funinstall`、`funsecret`
+- 支持安装额外的 Python 包
+
+**详细文档**：[查看完整说明](scripts/02-create-python-env/readme.md)
+
+**快速使用**：
+```bash
+cd scripts/02-create-python-env
+./deploy.sh
+```
+
+## 使用建议
+
+### 推荐的使用流程
+
+1. **首次使用**：
+   ```bash
+   # 1. 先配置 pip 源（提高后续安装速度）
+   cd scripts/01-configure-pip-sources
+   ./deploy.sh
+   
+   # 2. 创建 Python 环境
+   cd ../02-create-python-env
+   ./deploy.sh
+   ```
+
+2. **后续使用**：
+   - 如果网络环境变化，可以重新运行 `01-configure-pip-sources/deploy.sh` 更新 pip 源配置
+   - 如果需要创建新的 Python 版本环境，直接运行 `02-create-python-env/deploy.sh`
+
+### 两个脚本的关系
+
+- **`01-configure-pip-sources`** 用于配置 pip 镜像源，提高包下载速度
+- **`02-create-python-env`** 用于创建 Python 虚拟环境并安装包
+- **建议先运行 `01-configure-pip-sources`**，这样在创建环境时安装包会更快
+
+## 通过 curl 执行
+
+### 配置 pip 源
+
+```bash
+# 正常执行（支持交互）
+curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+
+# 非交互模式
+NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+```
+
+### 创建 Python 环境
+
+```bash
+# 正常执行（支持交互）
+curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash
+
+# 指定版本（跳过交互）
+curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
+
+# 指定版本并安装额外的包
+curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
+```
+
+## 环境变量
+
+两个脚本都支持以下环境变量：
+
+- `NONINTERACTIVE=1`：强制非交互模式，自动使用默认值，不进行交互
+
+## 前置要求
+
+### 网络连接
+
+所有脚本都需要网络连接：
+- `01-configure-pip-sources`：需要访问各个 pip 镜像源进行测试
+- `02-create-python-env`：需要从 PyPI 下载和安装包，以及可能需要下载 uv 安装程序
+
+### 系统要求
+
+- **操作系统**：macOS、Linux（Windows 需要 WSL 或 Git Bash）
+- **Shell**：Bash 3.2+（macOS 默认 bash 3.x 也支持）
+- **工具**：`curl`（通常系统自带）
+
+**注意**：`uv` 会在 `02-create-python-env` 脚本运行时自动检测并安装，无需手动安装。
+
+## 故障排除
+
+### 通用问题
+
+#### 问题：脚本执行权限不足
+
+**解决方案**：
+```bash
+chmod +x scripts/01-configure-pip-sources/deploy.sh
+chmod +x scripts/02-create-python-env/deploy.sh
+```
+
+#### 问题：网络连接问题
+
+**解决方案**：
+1. 检查网络连接
+2. 检查防火墙设置
+3. 如果使用代理，确保代理配置正确
+
+### pip 源配置问题
+
+详细故障排除请参考：[pip 源配置脚本说明](scripts/01-configure-pip-sources/readme.md#故障排除)
+
+### Python 环境创建问题
+
+详细故障排除请参考：[Python 环境创建脚本说明](scripts/02-create-python-env/readme.md#故障排除)
+
+## 项目结构说明
+
+### 脚本组织
+
+脚本按照功能模块组织在不同的目录中：
+
+- **`01-configure-pip-sources`**：pip 源配置相关脚本
+- **`02-create-python-env`**：Python 环境创建相关脚本
+
+每个目录包含：
+- `deploy.sh`：主执行脚本
+- `readme.md`：详细的说明文档
+
+### 命名规范
+
+- 目录使用数字前缀（`01-`、`02-`）表示执行顺序
+- 主脚本统一命名为 `deploy.sh`
+- 说明文档统一命名为 `readme.md`
+
+## 开发说明
+
+### 本地测试
+
+在本地开发时，可以使用以下方法测试脚本：
+
+```bash
+# 测试 pip 源配置脚本
+cd scripts/01-configure-pip-sources
+./deploy.sh
+
+# 测试 Python 环境创建脚本
+cd ../02-create-python-env
+./deploy.sh
+```
+
+### 测试 curl 执行方式
+
+可以使用项目根目录的 `test-curl-mode.sh` 脚本测试 curl 执行方式：
+
+```bash
+# 测试 pip 源配置脚本
+cat scripts/01-configure-pip-sources/deploy.sh | bash
+
+# 测试 Python 环境创建脚本
+cat scripts/02-create-python-env/deploy.sh | bash
+```
+
+## 相关链接
+
+- [pip 源配置脚本详细说明](scripts/01-configure-pip-sources/readme.md)
+- [Python 环境创建脚本详细说明](scripts/02-create-python-env/readme.md)
+- [uv 官方文档](https://github.com/astral-sh/uv)
+- [Python 虚拟环境文档](https://docs.python.org/3/tutorial/venv.html)
+- [pip 配置文档](https://pip.pypa.io/en/stable/topics/configuration/)
+
+## 许可证
+
+本脚本遵循项目许可证。
