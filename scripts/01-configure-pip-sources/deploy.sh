@@ -125,7 +125,7 @@ PIP_SOURCE_NAMES=($(get_all_source_names))
 SELECTED_SOURCE=""
 SHOW_HELP=false
 TEST_TIMEOUT=10  # 网络测试超时时间（秒）
-VERBOSE=false    # 详细模式，显示检测详情
+VERBOSE=true     # 详细模式，显示检测详情（默认开启）
 TEST_PACKAGE="setuptools"  # 用于测试下载速度的包名（常用且较小的包）
 TEST_WHEEL_SIZE=0  # 测试下载的wheel文件大小（字节），0表示自动检测
 
@@ -163,7 +163,7 @@ show_help() {
 用法: $0 [选项]
 
 选项:
-  -v, --verbose          详细模式，显示网络检测的详细信息
+  -v, --verbose          详细模式，显示网络检测的详细信息（默认开启）
   -h, --help             显示此帮助信息
 
 说明:
@@ -1161,20 +1161,33 @@ confirm_write_config() {
         print_info "无法进行交互式确认，自动写入配置..."
         return 0
     else
-        # 可以交互，询问用户
-        while true; do
-            read -p "是否要写入此配置? [Y/n] (直接回车默认写入): " -n 1 -r < /dev/tty
-            echo
-            if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
-                print_info "确认写入配置..."
-                return 0
-            elif [[ $REPLY =~ ^[Nn]$ ]]; then
-                print_warn "用户取消写入配置"
-                exit 0
-            else
-                print_error "无效输入，请输入 Y 或 N"
-            fi
-        done
+        # 可以交互（包括通过 curl 执行但 /dev/tty 可用的情况），询问用户
+        # 先检查 /dev/tty 是否真的可用
+        if [ -c /dev/tty ] 2>/dev/null && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+            # /dev/tty 可用，尝试从终端读取
+            while true; do
+                if read -p "是否要写入此配置? [Y/n] (直接回车默认写入): " -n 1 -r < /dev/tty 2>/dev/null; then
+                    echo
+                    if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
+                        print_info "确认写入配置..."
+                        return 0
+                    elif [[ $REPLY =~ ^[Nn]$ ]]; then
+                        print_warn "用户取消写入配置"
+                        exit 0
+                    else
+                        print_error "无效输入，请输入 Y 或 N"
+                    fi
+                else
+                    # 读取失败，自动确认
+                    print_info "无法从终端读取输入，自动写入配置..."
+                    return 0
+                fi
+            done
+        else
+            # /dev/tty 不可用，自动确认
+            print_info "无法从终端读取输入，自动写入配置..."
+            return 0
+        fi
     fi
 }
 
