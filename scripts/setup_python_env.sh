@@ -19,20 +19,20 @@ DEFAULT_VERSION="3.12"
 PYTHON_VERSIONS=("3.14" "3.13" "3.12" "3.11" "3.10" "3.9" "3.8")
 PACKAGES=("funbuild" "funinstall" "funsecret")
 
-# 检测是否为交互式终端（在脚本开始时检测一次）
+# 检测是否可以交互（在脚本开始时检测一次）
 # 优先级：环境变量 > 实际检测
 # 可以通过设置 NONINTERACTIVE=1 强制非交互模式
+# 关键：即使通过管道执行，如果 /dev/tty 可用，也可以交互
 if [ "${NONINTERACTIVE:-}" = "1" ]; then
     IS_INTERACTIVE=false
+elif [ -c /dev/tty ] 2>/dev/null && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    # /dev/tty 可用且可读写，即使通过管道执行也可以交互
+    IS_INTERACTIVE=true
 elif [ -t 0 ] && [ -t 1 ]; then
-    # stdin 和 stdout 都是终端，且可以访问 /dev/tty
-    if [ -c /dev/tty ] 2>/dev/null; then
-        IS_INTERACTIVE=true
-    else
-        IS_INTERACTIVE=false
-    fi
+    # stdin 和 stdout 都是终端
+    IS_INTERACTIVE=true
 else
-    # 通过管道执行（curl | bash），stdin 不是终端
+    # 无法交互
     IS_INTERACTIVE=false
 fi
 
@@ -139,16 +139,16 @@ select_python_version() {
     done
     echo ""
     
-    # 检查是否为交互式终端
+    # 检查是否可以交互
     if [ "$IS_INTERACTIVE" = "false" ]; then
-        # 非交互式终端（通过管道执行），自动使用默认版本
-        print_info "检测到非交互式终端，自动使用默认版本: Python $DEFAULT_VERSION"
+        # 无法交互，自动使用默认版本
+        print_info "无法进行交互式选择，自动使用默认版本: Python $DEFAULT_VERSION"
         PYTHON_VERSION="$DEFAULT_VERSION"
         VERSION_NUM=$(echo "$DEFAULT_VERSION" | tr -d '.')
         ENV_PATH="$HOME/opt/py${VERSION_NUM}"
         print_info "环境路径: $ENV_PATH"
     else
-        # 交互式终端，使用read从/dev/tty读取输入
+        # 可以交互（包括通过 curl 执行但 /dev/tty 可用的情况），使用read从/dev/tty读取输入
         while true; do
             read -p "请选择版本 [1-$count, 直接回车使用默认 $DEFAULT_VERSION]: " choice < /dev/tty
             
@@ -200,13 +200,13 @@ create_venv() {
     if [ -d "$ENV_PATH" ]; then
         print_warn "Python环境已存在: $ENV_PATH"
         
-        # 检查是否为交互式终端
+        # 检查是否可以交互
         if [ "$IS_INTERACTIVE" = "false" ]; then
-            # 非交互式终端（通过管道执行），默认不删除，继续安装包
-            print_info "检测到非交互式终端，保留现有环境，继续安装包..."
+            # 无法交互，默认不删除，继续安装包
+            print_info "无法进行交互式选择，保留现有环境，继续安装包..."
             return 0
         else
-            # 交互式终端，询问用户
+            # 可以交互（包括通过 curl 执行但 /dev/tty 可用的情况），询问用户
             read -p "是否要删除并重新创建? [y/N] (直接回车默认不删除，继续安装包): " -n 1 -r < /dev/tty
             echo
         fi
