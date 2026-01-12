@@ -36,6 +36,7 @@ get_pip_source_info() {
         tbsite_aliyun) echo "http://yum.tbsite.net/aliyun-pypi/simple|淘宝内部阿里云源" ;;
         antfin) echo "https://pypi.antfin-inc.com/simple|蚂蚁内部源" ;;
         official) echo "https://pypi.org/simple|官方源" ;;
+        
         *) echo "|" ;;
     esac
 }
@@ -86,8 +87,39 @@ get_source_display_name() {
     echo "$info" | LC_ALL=C cut -d'|' -f2
 }
 
-# 所有支持的源名称列表（按优先级排序，常用源在前）
-PIP_SOURCE_NAMES=("tsinghua" "tencent" "ustc" "bfsu" "sjtu" "hust" "artlab-visable" "artlab-pai" "artlab-aop" "tbsite" "tbsite_aliyun" "antfin" "aliyun" "douban" "huawei" "official")
+# 从 get_pip_source_info 函数中提取所有源名称
+get_all_source_names() {
+    local source_names=()
+    # 获取脚本文件路径（优先使用 BASH_SOURCE[0]，否则使用 $0）
+    local script_file="${BASH_SOURCE[0]:-$0}"
+    
+    # 如果是相对路径，尝试转换为绝对路径
+    if [ ! -f "$script_file" ] && [ -f "./$(basename "$script_file")" ]; then
+        script_file="./$(basename "$script_file")"
+    fi
+    
+    # 从脚本文件中提取 get_pip_source_info 函数的 case 分支
+    if [ -f "$script_file" ]; then
+        # 使用 sed 和 grep 提取 case 分支中的源名称
+        # 提取从 get_pip_source_info() 到 } 之间的内容，然后匹配 case 分支模式
+        while IFS= read -r line; do
+            # 匹配 case 分支：源名) echo "..."
+            if [[ "$line" =~ ^[[:space:]]+([a-zA-Z0-9_-]+)\) ]]; then
+                local source_name="${BASH_REMATCH[1]}"
+                # 排除 *) 通配符分支
+                if [ "$source_name" != "*" ]; then
+                    source_names+=("$source_name")
+                fi
+            fi
+        done < <(sed -n '/^get_pip_source_info()/,/^}/p' "$script_file" 2>/dev/null | grep -E '^\s+[a-zA-Z0-9_-]+\)')
+    fi
+    
+    # 如果解析失败，返回空数组
+    echo "${source_names[@]}"
+}
+
+# 初始化所有支持的源名称列表（从 get_pip_source_info 自动提取）
+PIP_SOURCE_NAMES=($(get_all_source_names))
 
 # 命令行参数
 SELECTED_SOURCE=""
@@ -192,10 +224,17 @@ check_network() {
     local url=$1
     local name=$2
     
-    # 确保 URL 以 /simple/ 或 /simple 结尾，这是 pip 源的标准路径
+    # 对于自定义源（从现有配置读取的），保持原始 URL 不变
+    # 对于预定义源，如果 URL 不以 /simple/ 结尾，添加它
     local test_url="$url"
-    if [[ ! "$test_url" =~ /simple/?$ ]]; then
-        # 如果 URL 不以 /simple/ 结尾，添加它
+    
+    # 检查是否是自定义源（包含 @ 符号，说明有认证信息，或者是非标准路径）
+    # 或者检查 URL 是否已经包含明确的路径（不以 /simple/ 结尾但包含其他路径）
+    if [[ "$url" =~ @ ]] || [[ "$url" =~ /[^/]+/[^/]+ ]] && [[ ! "$url" =~ /simple/?$ ]]; then
+        # 自定义源或已有明确路径的源，保持原始 URL 不变
+        test_url="$url"
+    elif [[ ! "$test_url" =~ /simple/?$ ]]; then
+        # 预定义源且没有明确路径，添加 /simple/
         test_url="${url%/}/simple/"
     fi
     
@@ -205,6 +244,12 @@ check_network() {
     
     # 使用 curl 检测网络连通性，设置超时时间
     if command -v curl &> /dev/null; then
+        # 检查是否是带认证信息的自定义源
+        local is_authenticated=false
+        if [[ "$url" =~ @ ]]; then
+            is_authenticated=true
+        fi
+        
         # 尝试多种方式检测：
         # 1. 先尝试 GET 请求到 /simple/ 路径（更可靠）
         # 2. 允许重定向（-L）
@@ -221,6 +266,19 @@ check_network() {
                 print_debug "$name 检测成功，HTTP 状态码: $http_code"
             fi
             return 0
+        fi
+        
+        # 对于带认证信息的源，即使返回 400-499，只要能建立连接也认为可用
+        # 因为某些源可能对直接访问有限制，但 pip 使用时是正常的
+        if [ "$is_authenticated" = "true" ] && [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
+            # 检查是否能真正建立连接（通过检查响应头）
+            local response_headers=$(curl -s -I --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" 2>/dev/null | head -1)
+            if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
+                if [ "$VERBOSE" = "true" ]; then
+                    print_debug "$name 检测成功（带认证源，HTTP 状态码: $http_code，但能建立连接）"
+                fi
+                return 0
+            fi
         fi
         
         # 如果上面的方法失败，尝试更宽松的方式：只要能够连接就行
@@ -275,6 +333,10 @@ test_package_latency() {
         package_url="${base_url}${package_name}/"
     elif [[ "$source_url" =~ /pypi/ ]]; then
         # 非标准格式（如 artlab-visable、artlab-pai、artlab-aop）：http://xxx.com/pypi/xxx -> http://xxx.com/pypi/xxx/package_name/
+        package_url="${source_url%/}/${package_name}/"
+    elif [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
+        # 自定义路径格式（如 https://user:pass@host.com/path/to/pypi/funpy）
+        # 保持原始路径结构，在末尾添加包名
         package_url="${source_url%/}/${package_name}/"
     else
         # 其他格式，尝试添加 /simple/
@@ -345,6 +407,10 @@ test_package_download_speed() {
         base_url="${base_url%/}/"
         package_url="${base_url}${package_name}/"
     elif [[ "$source_url" =~ /pypi/ ]]; then
+        package_url="${source_url%/}/${package_name}/"
+    elif [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
+        # 自定义路径格式（如 https://user:pass@host.com/path/to/pypi/funpy）
+        # 保持原始路径结构，在末尾添加包名
         package_url="${source_url%/}/${package_name}/"
     else
         package_url="${source_url%/}/simple/${package_name}/"
@@ -451,9 +517,13 @@ test_all_sources() {
             
             # 如果无法下载包，至少测试源的响应时间
             if [ "$latency" = "999999" ] || [ "$latency" -ge 999999 ] 2>/dev/null; then
-                # 测试源的响应时间（通过访问 /simple/ 或根目录）
+                # 测试源的响应时间（通过访问源 URL 本身）
+                # 对于自定义路径的源（包含 @ 或已有明确路径），直接使用原始 URL
                 local test_url="$source_url"
-                if [[ ! "$test_url" =~ /simple/?$ ]]; then
+                if [[ "$source_url" =~ @ ]] || [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
+                    # 自定义源或已有明确路径的源，直接使用原始 URL（可能需要在末尾加 /）
+                    test_url="${source_url%/}/"
+                elif [[ ! "$test_url" =~ /simple/?$ ]]; then
                     if [[ "$test_url" =~ /pypi/ ]]; then
                         test_url="${test_url%/}/"
                     else
@@ -465,7 +535,26 @@ test_all_sources() {
                 local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$test_url" 2>/dev/null)
                 local end_time=$(date +%s%N)
                 
-                if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+                # 检查是否是带认证信息的源
+                local is_authenticated=false
+                if [[ "$source_url" =~ @ ]]; then
+                    is_authenticated=true
+                fi
+                
+                # 对于带认证信息的源，即使返回 400-499，只要能建立连接也认为可用
+                if [ "$is_authenticated" = "true" ] && [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
+                    # 检查是否能真正建立连接（通过检查响应头）
+                    local response_headers=$(curl -s -I --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" 2>/dev/null | head -1)
+                    if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
+                        latency=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
+                        # 带认证的源即使返回 400，但能建立连接，也作为主源
+                        primary_sources+=("${source_name}|${latency}|${download_speed}|0")
+                        all_test_results+=("${source_name}|${latency}|${download_speed}|可用|补充")
+                    else
+                        # 完全无法访问，不加入补充列表，只记录为不可用
+                        all_test_results+=("${source_name}|N/A|0.00|不可用|-")
+                    fi
+                elif [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
                     latency=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
                     # 即使无法下载包，但能响应，也作为主源，但标记为补充
                     primary_sources+=("${source_name}|${latency}|${download_speed}|0")
@@ -635,10 +724,11 @@ test_all_sources() {
     fi
     
     # 返回排序后的源列表（通过全局变量）
-    # 格式：主源（按下载速度排序，N/A 在后），网络不可用或延迟N/A的源不加入配置
+    # 格式：主源（按下载速度排序，N/A 在后），网络不可用或延迟N/A的源保存到 UNAVAILABLE_SOURCES
     AVAILABLE_SOURCES=()
     SOURCE_SPEEDS=()
     SOURCE_HAS_PACKAGE=()
+    UNAVAILABLE_SOURCES=()  # 不可用的源列表（保存到配置文件的注释中）
     
     # 添加主源（包括能响应但无法下载包的源）
     for item in "${primary_sources[@]}"; do
@@ -650,7 +740,25 @@ test_all_sources() {
         SOURCE_HAS_PACKAGE+=("$has_pkg")
     done
     
-    # 不再添加补充源到配置中（网络不可用或延迟N/A的源不加入配置）
+    # 收集不可用的源（保存到配置文件的注释中，避免丢失）
+    for result in "${all_test_results[@]}"; do
+        local source=$(echo "$result" | LC_ALL=C cut -d'|' -f1)
+        local status=$(echo "$result" | LC_ALL=C cut -d'|' -f4)  # 状态在第4个字段
+        
+        # 检查是否已经在可用源中
+        local found=false
+        for available_source in "${AVAILABLE_SOURCES[@]}"; do
+            if [ "$available_source" = "$source" ]; then
+                found=true
+                break
+            fi
+        done
+        
+        # 如果是不可用的源且不在可用源列表中，添加到不可用源列表
+        if [ "$status" = "不可用" ] && [ "$found" = "false" ]; then
+            UNAVAILABLE_SOURCES+=("$source")
+        fi
+    done
     
     if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
         local fastest_source="${AVAILABLE_SOURCES[0]}"
@@ -734,8 +842,22 @@ read_existing_sources() {
     # 读取 extra-index-url（可能有多行）
     local in_extra_index=false
     while IFS= read -r line || [ -n "$line" ]; do
-        # 跳过注释和空行
-        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
+        # 跳过空行
+        if [[ -z "${line// }" ]]; then
+            continue
+        fi
+        
+        # 读取注释中的不可用源（格式：# unavailable-source: URL  # 说明）
+        if [[ "$line" =~ ^[[:space:]]*#[[:space:]]*unavailable-source:[[:space:]]*(https?://[^[:space:]]+) ]]; then
+            local url="${BASH_REMATCH[1]}"
+            if [ -n "$url" ]; then
+                existing_sources+=("$url")
+            fi
+            continue
+        fi
+        
+        # 跳过普通注释
+        if [[ "$line" =~ ^[[:space:]]*# ]]; then
             continue
         fi
         
@@ -828,6 +950,8 @@ add_custom_sources_to_list() {
             custom_sources+=("${source_id}|${url}|${display_name}")
             
             # 添加到源名称列表（放在前面，优先检测，避免丢失）
+            # 重新初始化 PIP_SOURCE_NAMES，包含自定义源
+            PIP_SOURCE_NAMES=($(get_all_source_names))
             PIP_SOURCE_NAMES=("$source_id" "${PIP_SOURCE_NAMES[@]}")
         fi
     done
@@ -949,8 +1073,11 @@ confirm_write_config() {
     local config_preview="# pip 配置文件\n"
     config_preview+="# 由 configure-pip-sources.sh 自动生成\n"
     config_preview+="# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')\n"
-    config_preview+="# 配置了 ${#AVAILABLE_SOURCES[@]} 个源（按下载速度排序）\n\n"
-    config_preview+="[global]\n"
+    config_preview+="# 配置了 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）\n"
+    if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
+        config_preview+="# 另有 ${#UNAVAILABLE_SOURCES[@]} 个不可用源已保存到注释中（避免丢失）\n"
+    fi
+    config_preview+="\n[global]\n"
     
     # 第一个源作为主源（index-url）
     if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
@@ -1013,6 +1140,18 @@ confirm_write_config() {
     done
     config_preview+="\n"
     
+    # 添加不可用源的预览（注释格式）
+    if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
+        config_preview+="# 以下源在检测时不可用，但已保存以避免丢失（可能是临时网络问题）\n"
+        config_preview+="# 如果这些源恢复可用，下次运行脚本时会自动检测并启用\n"
+        for source_name in "${UNAVAILABLE_SOURCES[@]}"; do
+            local source_url=$(get_pip_source_url "$source_name")
+            local display_name=$(get_source_display_name "$source_name")
+            config_preview+="# unavailable-source: $source_url  # $display_name ($source_name)\n"
+        done
+        config_preview+="\n"
+    fi
+    
     echo -e "$config_preview"
     echo ""
     
@@ -1048,7 +1187,10 @@ write_pip_config() {
         echo "# pip 配置文件"
         echo "# 由 configure-pip-sources.sh 自动生成"
         echo "# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "# 配置了 ${#AVAILABLE_SOURCES[@]} 个源（按下载速度排序）"
+        echo "# 配置了 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）"
+        if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
+            echo "# 另有 ${#UNAVAILABLE_SOURCES[@]} 个不可用源已保存到注释中（避免丢失）"
+        fi
         echo ""
         echo "[global]"
         
@@ -1110,6 +1252,20 @@ write_pip_config() {
                 fi
             fi
         done
+        echo ""
+        
+        # 保存不可用的源到注释中（避免因检测问题丢失）
+        # 格式：# unavailable-source: URL  # 说明
+        if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
+            echo "# 以下源在检测时不可用，但已保存以避免丢失（可能是临时网络问题）"
+            echo "# 如果这些源恢复可用，下次运行脚本时会自动检测并启用"
+            for source_name in "${UNAVAILABLE_SOURCES[@]}"; do
+                local source_url=$(get_pip_source_url "$source_name")
+                local display_name=$(get_source_display_name "$source_name")
+                echo "# unavailable-source: $source_url  # $display_name ($source_name)"
+            done
+            echo ""
+        fi
     } > "$PIP_CONFIG_FILE"
 
     if [ $? -eq 0 ]; then
