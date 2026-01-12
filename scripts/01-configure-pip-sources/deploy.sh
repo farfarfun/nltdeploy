@@ -112,6 +112,28 @@ get_all_source_names() {
                 fi
             fi
         done < <(sed -n '/^get_pip_source_info()/,/^}/p' "$script_file" 2>/dev/null | grep -E '^\s+[a-zA-Z0-9_-]+\)')
+    else
+        # 如果无法从文件读取（通过管道执行），尝试从函数定义中提取
+        # 使用 declare -f 获取函数定义（更可靠）
+        local func_def=""
+        if command -v declare &> /dev/null; then
+            func_def=$(declare -f get_pip_source_info 2>/dev/null)
+        elif command -v type &> /dev/null; then
+            func_def=$(type get_pip_source_info 2>/dev/null)
+        fi
+        
+        if [ -n "$func_def" ]; then
+            while IFS= read -r line; do
+                # 匹配 case 分支：源名) echo "..."
+                if [[ "$line" =~ ^[[:space:]]+([a-zA-Z0-9_-]+)\) ]]; then
+                    local source_name="${BASH_REMATCH[1]}"
+                    # 排除 *) 通配符分支
+                    if [ "$source_name" != "*" ]; then
+                        source_names+=("$source_name")
+                    fi
+                fi
+            done <<< "$func_def"
+        fi
     fi
     
     # 如果解析失败，返回空数组
@@ -559,6 +581,19 @@ test_all_sources() {
                     # 即使无法下载包，但能响应，也作为主源，但标记为补充
                     primary_sources+=("${source_name}|${latency}|${download_speed}|0")
                     all_test_results+=("${source_name}|${latency}|${download_speed}|可用|补充")
+                elif [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
+                    # 返回 400-499 的源，如果能通过 check_network（说明能建立连接），也认为可用
+                    # 因为某些源可能对直接访问有限制，但 pip 使用时是正常的
+                    local response_headers=$(curl -s -I --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" 2>/dev/null | head -1)
+                    if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
+                        latency=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
+                        # 能建立连接，即使返回 400-499，也作为主源
+                        primary_sources+=("${source_name}|${latency}|${download_speed}|0")
+                        all_test_results+=("${source_name}|${latency}|${download_speed}|可用|补充")
+                    else
+                        # 完全无法访问，不加入补充列表，只记录为不可用
+                        all_test_results+=("${source_name}|N/A|0.00|不可用|-")
+                    fi
                 else
                     # 完全无法访问，不加入补充列表，只记录为不可用
                     all_test_results+=("${source_name}|N/A|0.00|不可用|-")
@@ -1155,39 +1190,36 @@ confirm_write_config() {
     echo -e "$config_preview"
     echo ""
     
-    # 检查是否可以交互
-    if [ "$IS_INTERACTIVE" = "false" ]; then
-        # 无法交互，自动确认
-        print_info "无法进行交互式确认，自动写入配置..."
+    # 检查是否可以交互（直接检查，不依赖 IS_INTERACTIVE 变量）
+    # 如果设置了 NONINTERACTIVE=1，强制非交互模式
+    if [ "${NONINTERACTIVE:-}" = "1" ]; then
+        # 强制非交互模式，自动确认
+        print_info "非交互模式，自动写入配置..."
         return 0
-    else
-        # 可以交互（包括通过 curl 执行但 /dev/tty 可用的情况），询问用户
-        # 先检查 /dev/tty 是否真的可用
-        if [ -c /dev/tty ] 2>/dev/null && [ -r /dev/tty ] && [ -w /dev/tty ]; then
-            # /dev/tty 可用，尝试从终端读取
-            while true; do
-                if read -p "是否要写入此配置? [Y/n] (直接回车默认写入): " -n 1 -r < /dev/tty 2>/dev/null; then
-                    echo
-                    if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
-                        print_info "确认写入配置..."
-                        return 0
-                    elif [[ $REPLY =~ ^[Nn]$ ]]; then
-                        print_warn "用户取消写入配置"
-                        exit 0
-                    else
-                        print_error "无效输入，请输入 Y 或 N"
-                    fi
-                else
-                    # 读取失败，自动确认
-                    print_info "无法从终端读取输入，自动写入配置..."
+    elif [ -c /dev/tty ] 2>/dev/null && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+        # /dev/tty 可用，尝试从终端读取（包括通过 curl 执行但 /dev/tty 可用的情况）
+        while true; do
+            if read -p "是否要写入此配置? [Y/n] (直接回车默认写入): " -n 1 -r < /dev/tty 2>/dev/null; then
+                echo
+                if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
+                    print_info "确认写入配置..."
                     return 0
+                elif [[ $REPLY =~ ^[Nn]$ ]]; then
+                    print_warn "用户取消写入配置"
+                    exit 0
+                else
+                    print_error "无效输入，请输入 Y 或 N"
                 fi
-            done
-        else
-            # /dev/tty 不可用，自动确认
-            print_info "无法从终端读取输入，自动写入配置..."
-            return 0
-        fi
+            else
+                # 读取失败，自动确认
+                print_info "无法从终端读取输入，自动写入配置..."
+                return 0
+            fi
+        done
+    else
+        # /dev/tty 不可用，自动确认
+        print_info "无法从终端读取输入，自动写入配置..."
+        return 0
     fi
 }
 
