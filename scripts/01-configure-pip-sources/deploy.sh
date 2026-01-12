@@ -1190,37 +1190,9 @@ confirm_write_config() {
     echo -e "$config_preview"
     echo ""
     
-    # 检查是否可以交互（直接检查，不依赖 IS_INTERACTIVE 变量）
-    # 如果设置了 NONINTERACTIVE=1，强制非交互模式
-    if [ "${NONINTERACTIVE:-}" = "1" ]; then
-        # 强制非交互模式，自动确认
-        print_info "非交互模式，自动写入配置..."
-        return 0
-    elif [ -c /dev/tty ] 2>/dev/null && [ -r /dev/tty ] && [ -w /dev/tty ]; then
-        # /dev/tty 可用，尝试从终端读取（包括通过 curl 执行但 /dev/tty 可用的情况）
-        while true; do
-            if read -p "是否要写入此配置? [Y/n] (直接回车默认写入): " -n 1 -r < /dev/tty 2>/dev/null; then
-                echo
-                if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
-                    print_info "确认写入配置..."
-                    return 0
-                elif [[ $REPLY =~ ^[Nn]$ ]]; then
-                    print_warn "用户取消写入配置"
-                    exit 0
-                else
-                    print_error "无效输入，请输入 Y 或 N"
-                fi
-            else
-                # 读取失败，自动确认
-                print_info "无法从终端读取输入，自动写入配置..."
-                return 0
-            fi
-        done
-    else
-        # /dev/tty 不可用，自动确认
-        print_info "无法从终端读取输入，自动写入配置..."
-        return 0
-    fi
+    # 直接写入配置，不询问用户确认
+    print_info "准备写入配置..."
+    return 0
 }
 
 # 写入 pip 配置（多源配置）
