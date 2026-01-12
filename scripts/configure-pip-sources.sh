@@ -1,0 +1,1236 @@
+#!/bin/bash
+
+# 自动配置 pip 源的脚本
+# 检测网络连通性并配置常用的 pip 镜像源
+
+set -e  # 遇到错误立即退出
+
+# 颜色输出
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+# 配置变量
+PIP_CONFIG_DIR=""
+PIP_CONFIG_FILE=""
+BACKUP_SUFFIX=".backup.$(date +%Y%m%d_%H%M%S)"
+
+# 统一的 pip 镜像源配置（返回 URL|显示名称）
+get_pip_source_info() {
+    case "$1" in
+        tsinghua) echo "https://pypi.tuna.tsinghua.edu.cn/simple/|清华大学镜像源" ;;
+        aliyun) echo "https://mirrors.aliyun.com/pypi/simple/|阿里云镜像源" ;;
+        douban) echo "https://pypi.douban.com/simple/|豆瓣镜像源" ;;
+        tencent) echo "https://mirrors.cloud.tencent.com/pypi/simple/|腾讯云镜像源" ;;
+        huawei) echo "https://mirrors.huaweicloud.com/repository/pypi/simple|华为云镜像源" ;;
+        ustc) echo "https://pypi.mirrors.ustc.edu.cn/simple/|中科大镜像源" ;;
+        bfsu) echo "https://mirrors.bfsu.edu.cn/pypi/web/simple/|北京外国语大学镜像源" ;;
+        sjtu) echo "https://mirror.sjtu.edu.cn/pypi/web/simple/|上海交通大学镜像源" ;;
+        hust) echo "http://pypi.hustunique.com/|华中科技大学镜像源" ;;
+        artlab-visable) echo "https://artlab.alibaba-inc.com/1/pypi/visable|artlab-visable" ;;
+        artlab-pai) echo "https://artlab.alibaba-inc.com/1/pypi/pai|artlab-pai" ;;
+        artlab-aop) echo "https://artlab.alibaba-inc.com/1/pypi/aop|artlab-aop" ;;
+        tbsite) echo "http://yum.tbsite.net/pypi/simple|淘宝内部源" ;;
+        tbsite_aliyun) echo "http://yum.tbsite.net/aliyun-pypi/simple|淘宝内部阿里云源" ;;
+        antfin) echo "https://pypi.antfin-inc.com/simple|蚂蚁内部源" ;;
+        official) echo "https://pypi.org/simple|官方源" ;;
+        *) echo "|" ;;
+    esac
+}
+
+# 获取源的 URL（支持自定义源）
+get_pip_source_url() {
+    local source_name=$1
+    
+    # 检查是否是自定义源
+    if [[ "$source_name" =~ ^custom- ]]; then
+        # 从 CUSTOM_SOURCES 中查找
+        for custom_item in "${CUSTOM_SOURCES[@]}"; do
+            local source_id=$(echo "$custom_item" | LC_ALL=C cut -d'|' -f1)
+            if [ "$source_id" = "$source_name" ]; then
+                echo "$custom_item" | LC_ALL=C cut -d'|' -f2
+                return 0
+            fi
+        done
+        echo ""
+        return 1
+    fi
+    
+    # 否则使用预定义源
+    local info=$(get_pip_source_info "$source_name")
+    echo "$info" | LC_ALL=C cut -d'|' -f1
+}
+
+# 获取源的显示名称（支持自定义源）
+get_source_display_name() {
+    local source_name=$1
+    
+    # 检查是否是自定义源
+    if [[ "$source_name" =~ ^custom- ]]; then
+        # 从 CUSTOM_SOURCES 中查找
+        for custom_item in "${CUSTOM_SOURCES[@]}"; do
+            local source_id=$(echo "$custom_item" | LC_ALL=C cut -d'|' -f1)
+            if [ "$source_id" = "$source_name" ]; then
+                echo "$custom_item" | LC_ALL=C cut -d'|' -f3
+                return 0
+            fi
+        done
+        echo "$source_name"
+        return 1
+    fi
+    
+    # 否则使用预定义源
+    local info=$(get_pip_source_info "$source_name")
+    echo "$info" | LC_ALL=C cut -d'|' -f2
+}
+
+# 所有支持的源名称列表（按优先级排序，常用源在前）
+PIP_SOURCE_NAMES=("tsinghua" "tencent" "ustc" "bfsu" "sjtu" "hust" "artlab-visable" "artlab-pai" "artlab-aop" "tbsite" "tbsite_aliyun" "antfin" "aliyun" "douban" "huawei" "official")
+
+# 命令行参数
+SELECTED_SOURCE=""
+SHOW_HELP=false
+TEST_TIMEOUT=10  # 网络测试超时时间（秒）
+VERBOSE=false    # 详细模式，显示检测详情
+TEST_PACKAGE="setuptools"  # 用于测试下载速度的包名（常用且较小的包）
+TEST_WHEEL_SIZE=0  # 测试下载的wheel文件大小（字节），0表示自动检测
+
+# 检测是否可以交互
+if [ "${NONINTERACTIVE:-}" = "1" ]; then
+    IS_INTERACTIVE=false
+elif [ -c /dev/tty ] 2>/dev/null && [ -r /dev/tty ] && [ -w /dev/tty ]; then
+    IS_INTERACTIVE=true
+elif [ -t 0 ] && [ -t 1 ]; then
+    IS_INTERACTIVE=true
+else
+    IS_INTERACTIVE=false
+fi
+
+# 打印带颜色的消息
+print_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+print_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+print_debug() {
+    echo -e "${BLUE}[DEBUG]${NC} $1" >&2
+}
+
+# 显示帮助信息
+show_help() {
+    cat << EOF
+用法: $0 [选项]
+
+选项:
+  -v, --verbose          详细模式，显示网络检测的详细信息
+  -h, --help             显示此帮助信息
+
+说明:
+  脚本会自动检测所有可用的 pip 源，测试下载速度，并按速度排序配置。
+  能下载到测试包或能响应的源作为主源，网络不可用或延迟N/A的源不会加入配置。
+
+支持的 pip 源:
+  tsinghua      - 清华大学镜像源 (https://pypi.tuna.tsinghua.edu.cn/simple/)
+  tencent       - 腾讯云镜像源 (https://mirrors.cloud.tencent.com/pypi/simple/)
+  ustc          - 中科大镜像源 (https://pypi.mirrors.ustc.edu.cn/simple/)
+  bfsu          - 北京外国语大学镜像源 (https://mirrors.bfsu.edu.cn/pypi/web/simple/)
+  sjtu          - 上海交通大学镜像源 (https://mirror.sjtu.edu.cn/pypi/web/simple/)
+  hust          - 华中科技大学镜像源 (http://pypi.hustunique.com/)
+  artlab-visable - artlab-visable (https://artlab.alibaba-inc.com/1/pypi/visable)
+  artlab-pai     - artlab-pai (https://artlab.alibaba-inc.com/1/pypi/pai)
+  artlab-aop     - artlab-aop (https://artlab.alibaba-inc.com/1/pypi/aop)
+  tbsite        - 淘宝内部源 (http://yum.tbsite.net/pypi/simple)
+  tbsite_aliyun - 淘宝内部阿里云源 (http://yum.tbsite.net/aliyun-pypi/simple)
+  antfin        - 蚂蚁内部源 (https://pypi.antfin-inc.com/simple)
+  aliyun        - 阿里云镜像源 (https://mirrors.aliyun.com/pypi/simple/)
+  douban        - 豆瓣镜像源 (https://pypi.douban.com/simple/)
+  huawei        - 华为云镜像源 (https://mirrors.huaweicloud.com/repository/pypi/simple)
+  official      - 官方源 (https://pypi.org/simple)
+
+示例:
+  $0                      # 自动检测并配置所有可用源（按速度排序）
+  $0 -v                   # 详细模式，显示检测详情
+  NONINTERACTIVE=1 $0     # 非交互模式，自动配置
+
+通过 curl 执行:
+  curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/configure-pip-sources.sh | bash
+EOF
+}
+
+# 解析命令行参数
+parse_args() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                SHOW_HELP=true
+                shift
+                ;;
+            -v|--verbose)
+                VERBOSE=true
+                shift
+                ;;
+            *)
+                print_error "未知选项: $1"
+                show_help
+                exit 1
+                ;;
+        esac
+    done
+}
+
+# 检测网络连通性
+check_network() {
+    local url=$1
+    local name=$2
+    
+    # 确保 URL 以 /simple/ 或 /simple 结尾，这是 pip 源的标准路径
+    local test_url="$url"
+    if [[ ! "$test_url" =~ /simple/?$ ]]; then
+        # 如果 URL 不以 /simple/ 结尾，添加它
+        test_url="${url%/}/simple/"
+    fi
+    
+    if [ "$VERBOSE" = "true" ]; then
+        print_debug "测试 URL: $test_url"
+    fi
+    
+    # 使用 curl 检测网络连通性，设置超时时间
+    if command -v curl &> /dev/null; then
+        # 尝试多种方式检测：
+        # 1. 先尝试 GET 请求到 /simple/ 路径（更可靠）
+        # 2. 允许重定向（-L）
+        # 3. 只要能够连接并返回内容即可（不要求必须是 200）
+        local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$test_url" 2>/dev/null)
+        
+        if [ "$VERBOSE" = "true" ]; then
+            print_debug "HTTP 状态码: $http_code"
+        fi
+        
+        # HTTP 状态码 200-399 都认为是可用的（包括重定向）
+        if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+            if [ "$VERBOSE" = "true" ]; then
+                print_debug "$name 检测成功，HTTP 状态码: $http_code"
+            fi
+            return 0
+        fi
+        
+        # 如果上面的方法失败，尝试更宽松的方式：只要能够连接就行
+        if curl -s --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" &> /dev/null; then
+            if [ "$VERBOSE" = "true" ]; then
+                print_debug "$name 检测成功（通过连接测试）"
+            fi
+            return 0
+        fi
+        
+        if [ "$VERBOSE" = "true" ]; then
+            print_debug "$name 检测失败"
+        fi
+    elif command -v wget &> /dev/null; then
+        # 使用 wget 检测
+        if wget --spider --timeout="$TEST_TIMEOUT" --tries=1 --quiet "$test_url" &> /dev/null; then
+            if [ "$VERBOSE" = "true" ]; then
+                print_debug "$name 检测成功（使用 wget）"
+            fi
+            return 0
+        fi
+    else
+        # 如果没有 curl 或 wget，尝试使用 ping 检测基本网络连通性
+        print_warn "未找到 curl 或 wget，跳过网络检测"
+        return 0
+    fi
+    
+    return 1
+}
+
+# 测试包的响应延迟（HTTP请求延迟）
+test_package_latency() {
+    local source_url=$1
+    local package_name=$2
+    
+    if ! command -v curl &> /dev/null; then
+        echo "999999"
+        return 1
+    fi
+    
+    # 根据源 URL 格式构建包 URL
+    local package_url=""
+    
+    # 检查是否是标准 /simple/ 格式
+    if [[ "$source_url" =~ /simple/?$ ]] || [[ "$source_url" =~ /simple/ ]]; then
+        # 标准格式：https://xxx.com/simple/ -> https://xxx.com/simple/package_name/
+        local base_url="${source_url%/}"
+        if [[ ! "$base_url" =~ /simple/?$ ]]; then
+            base_url="${base_url}/simple"
+        fi
+        base_url="${base_url%/}/"
+        package_url="${base_url}${package_name}/"
+    elif [[ "$source_url" =~ /pypi/ ]]; then
+        # 非标准格式（如 artlab-visable、artlab-pai、artlab-aop）：http://xxx.com/pypi/xxx -> http://xxx.com/pypi/xxx/package_name/
+        package_url="${source_url%/}/${package_name}/"
+    else
+        # 其他格式，尝试添加 /simple/
+        package_url="${source_url%/}/simple/${package_name}/"
+    fi
+    
+    # 方法1: 尝试获取包的索引页面（HTML页面，通常较小）
+    local start_time=$(date +%s%N)
+    local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null)
+    local end_time=$(date +%s%N)
+    
+    # 如果索引页面可用（200-399），计算延迟
+    if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+        local duration=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
+        echo "$duration"
+        return 0
+    fi
+    
+    # 方法2: 如果索引页面不可用，尝试 JSON API（某些源支持）
+    local json_url="${package_url%/}/json"
+    start_time=$(date +%s%N)
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$json_url" 2>/dev/null)
+    end_time=$(date +%s%N)
+    
+    if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+        local duration=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
+        echo "$duration"
+        return 0
+    fi
+    
+    # 方法3: 对于非标准源，尝试直接访问源根目录测试连通性
+    if [[ "$source_url" =~ /pypi/ ]]; then
+        start_time=$(date +%s%N)
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "${source_url%/}/" 2>/dev/null)
+        end_time=$(date +%s%N)
+        
+        if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+            local duration=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
+            echo "$duration"
+            return 0
+        fi
+    fi
+    
+    # 如果都失败，返回一个很大的数字表示不可用
+    echo "999999"
+    return 1
+}
+
+# 测试包的下载速度（通过下载一个小文件来测试，返回 MB/s）
+test_package_download_speed() {
+    local source_url=$1
+    local package_name=$2
+    
+    if ! command -v curl &> /dev/null; then
+        echo "0"
+        return 1
+    fi
+    
+    # 根据源 URL 格式构建包 URL
+    local package_url=""
+    
+    # 检查是否是标准 /simple/ 格式
+    if [[ "$source_url" =~ /simple/?$ ]] || [[ "$source_url" =~ /simple/ ]]; then
+        local base_url="${source_url%/}"
+        if [[ ! "$base_url" =~ /simple/?$ ]]; then
+            base_url="${base_url}/simple"
+        fi
+        base_url="${base_url%/}/"
+        package_url="${base_url}${package_name}/"
+    elif [[ "$source_url" =~ /pypi/ ]]; then
+        package_url="${source_url%/}/${package_name}/"
+    else
+        package_url="${source_url%/}/simple/${package_name}/"
+    fi
+    
+    # 尝试从包的索引页面中找到一个小的wheel文件来下载
+    # 先获取包的索引页面
+    local index_content=$(curl -s --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null)
+    if [ -z "$index_content" ]; then
+        echo "0"
+        return 1
+    fi
+    
+    # 尝试找到一个小的wheel文件（.whl），优先选择较小的文件
+    local wheel_url=""
+    local smallest_size=999999999
+    
+    # 使用正则表达式查找wheel文件链接
+    while IFS= read -r line; do
+        if [[ "$line" =~ href=\"([^\"]+\.whl)\" ]]; then
+            local wheel_file="${BASH_REMATCH[1]}"
+            # 构建完整的URL
+            if [[ "$wheel_file" =~ ^https?:// ]]; then
+                wheel_url="$wheel_file"
+            else
+                wheel_url="${package_url}${wheel_file}"
+            fi
+            
+            # 尝试获取文件大小（HEAD请求）
+            local file_size=$(curl -s -I --max-time 5 -L "$wheel_url" 2>/dev/null | grep -i "content-length" | awk '{print $2}' | tr -d '\r\n')
+            if [ -n "$file_size" ] && [ "$file_size" -gt 0 ] && [ "$file_size" -lt 5000000 ] && [ "$file_size" -lt "$smallest_size" ]; then
+                smallest_size=$file_size
+                # 如果找到小于1MB的文件，就使用它
+                if [ "$file_size" -lt 1048576 ]; then
+                    break
+                fi
+            fi
+        fi
+    done <<< "$index_content"
+    
+    # 如果没有找到wheel文件，尝试下载索引页面本身来测试速度
+    if [ -z "$wheel_url" ] || [ "$smallest_size" -eq 999999999 ]; then
+        # 下载索引页面测试速度
+        local start_time=$(date +%s%N)
+        local downloaded_bytes=$(curl -s --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null | wc -c)
+        local end_time=$(date +%s%N)
+        
+        if [ "$downloaded_bytes" -gt 0 ]; then
+            local duration=$(( (end_time - start_time) / 1000000 ))  # 毫秒
+            if [ "$duration" -gt 0 ]; then
+                # 计算速度：字节/毫秒 -> MB/s (使用 awk 避免依赖 bc)
+                local speed_mbps=$(awk "BEGIN {printf \"%.2f\", $downloaded_bytes * 1000 / $duration / 1048576}" 2>/dev/null)
+                if [ -n "$speed_mbps" ] && [ "$(echo "$speed_mbps" | awk '{if($1>0) print 1; else print 0}')" = "1" ]; then
+                    echo "$speed_mbps"
+                    return 0
+                fi
+            fi
+        fi
+        echo "0"
+        return 1
+    fi
+    
+    # 下载wheel文件测试速度
+    local start_time=$(date +%s%N)
+    local downloaded_bytes=$(curl -s --max-time "$TEST_TIMEOUT" -L "$wheel_url" 2>/dev/null | wc -c)
+    local end_time=$(date +%s%N)
+    
+    if [ "$downloaded_bytes" -gt 0 ]; then
+        local duration=$(( (end_time - start_time) / 1000000 ))  # 毫秒
+        if [ "$duration" -gt 0 ]; then
+            # 计算速度：字节/毫秒 -> MB/s (使用 awk 避免依赖 bc)
+            local speed_mbps=$(awk "BEGIN {printf \"%.2f\", $downloaded_bytes * 1000 / $duration / 1048576}" 2>/dev/null)
+            if [ -n "$speed_mbps" ] && [ "$(echo "$speed_mbps" | awk '{if($1>0) print 1; else print 0}')" = "1" ]; then
+                echo "$speed_mbps"
+                return 0
+            fi
+        fi
+    fi
+    
+    echo "0"
+    return 1
+}
+
+
+# 测试所有源的连通性、下载速度并排序
+test_all_sources() {
+    print_info "正在测试所有 pip 源的连通性和下载速度..."
+    
+    # 存储源信息：格式为 "源名|速度|是否可用|是否有包"
+    local source_info=()
+    local primary_sources=()  # 能下载到包或能响应的主源
+    local all_test_results=()  # 所有检测结果（包括不可用的）
+    
+    for source_name in "${PIP_SOURCE_NAMES[@]}"; do
+        local source_url=$(get_pip_source_url "$source_name")
+        local display_name=$(get_source_display_name "$source_name")
+        
+        if check_network "$source_url" "$display_name"; then
+            # 测试包的响应延迟
+            local latency=$(test_package_latency "$source_url" "$TEST_PACKAGE" 2>/dev/null)
+            
+            # 测试包的下载速度（MB/s）
+            local download_speed=$(test_package_download_speed "$source_url" "$TEST_PACKAGE" 2>/dev/null)
+            
+            # 如果无法下载包，至少测试源的响应时间
+            if [ "$latency" = "999999" ] || [ "$latency" -ge 999999 ] 2>/dev/null; then
+                # 测试源的响应时间（通过访问 /simple/ 或根目录）
+                local test_url="$source_url"
+                if [[ ! "$test_url" =~ /simple/?$ ]]; then
+                    if [[ "$test_url" =~ /pypi/ ]]; then
+                        test_url="${test_url%/}/"
+                    else
+                        test_url="${test_url%/}/simple/"
+                    fi
+                fi
+                
+                local start_time=$(date +%s%N)
+                local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$test_url" 2>/dev/null)
+                local end_time=$(date +%s%N)
+                
+                if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+                    latency=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
+                    # 即使无法下载包，但能响应，也作为主源，但标记为补充
+                    primary_sources+=("${source_name}|${latency}|${download_speed}|0")
+                    all_test_results+=("${source_name}|${latency}|${download_speed}|可用|补充")
+                else
+                    # 完全无法访问，不加入补充列表，只记录为不可用
+                    all_test_results+=("${source_name}|N/A|0.00|不可用|-")
+                fi
+            else
+                # 能下载到包，是主源
+                primary_sources+=("${source_name}|${latency}|${download_speed}|1")
+                all_test_results+=("${source_name}|${latency}|${download_speed}|可用|主源")
+            fi
+        else
+            # 网络不可用，不加入补充列表
+            all_test_results+=("${source_name}|N/A|0.00|不可用|-")
+        fi
+    done
+    
+    if [ ${#primary_sources[@]} -eq 0 ]; then
+        print_error "所有 pip 源都不可用，请检查网络连接"
+        exit 1
+    fi
+    
+    # 对主源按下载速度排序（从大到小），下载速度为 N/A 的放到后面
+    if [ ${#primary_sources[@]} -gt 0 ]; then
+        # 使用简单的冒泡排序（兼容性更好）
+        local sorted_primary=()
+        local temp_array=("${primary_sources[@]}")
+        
+        # 提取信息并准备排序（使用 LC_ALL=C 避免字符编码问题）
+        # 格式：源名|延迟|下载速度|是否有包
+        # 排序键：有速度的源用速度值（负数，用于从大到小排序），N/A 的用延迟值（正数，放到后面）
+        for i in "${!temp_array[@]}"; do
+            local source=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f1)
+            local latency=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f2)
+            local speed=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f3)
+            local has_pkg=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f4)
+            
+            # 判断是否有有效的下载速度
+            local has_speed=0
+            local sort_key=""
+            
+            # 检查速度是否有效（大于0且不是0或0.00）
+            if [ -n "$speed" ] && [ "$speed" != "0" ] && [ "$speed" != "0.00" ] && [ "$speed" != "N/A" ]; then
+                # 使用 awk 检查速度是否大于 0
+                local speed_check=$(echo "$speed" | awk '{if($1>0) print 1; else print 0}' 2>/dev/null)
+                if [ "$speed_check" = "1" ]; then
+                    has_speed=1
+                    # 有速度的源：使用 (1000 - speed) * 1000 作为排序键（速度越大，排序键越小，排在前面）
+                    # 使用整数格式确保数值比较正确（速度通常在0-100MB/s之间，所以 (1000-speed)*1000 在 0-1000000 之间）
+                    local speed_num=$(echo "$speed" | awk '{print $1}' 2>/dev/null || echo "0")
+                    local sort_value=$(awk "BEGIN {printf \"%.0f\", (1000 - $speed_num) * 1000}" 2>/dev/null || echo "1000000")
+                    sort_key=$(awk "BEGIN {printf \"%020d\", $sort_value}" 2>/dev/null || echo "00000000000001000000")
+                fi
+            fi
+            
+            if [ "$has_speed" = "0" ]; then
+                # 没有速度的源（N/A）：使用延迟值作为排序键，加上一个大的偏移量确保在后面
+                local latency_num=$(echo "$latency" | awk '{print int($1+0.5)}' 2>/dev/null || echo "999999")
+                # 使用固定宽度格式，确保 N/A 的源排序键都大于有速度的源
+                sort_key=$(awk "BEGIN {printf \"%020d\", 2000000 + $latency_num}" 2>/dev/null || echo "2999999")
+            fi
+            
+            sorted_primary+=("${sort_key}|${source}|${latency}|${speed}|${has_pkg}")
+        done
+        
+        # 简单排序（按排序键，从小到大）
+        local n=${#sorted_primary[@]}
+        for ((i=0; i<n-1; i++)); do
+            for ((j=0; j<n-i-1; j++)); do
+                local key1=$(echo "${sorted_primary[$j]}" | LC_ALL=C cut -d'|' -f1)
+                local key2=$(echo "${sorted_primary[$j+1]}" | LC_ALL=C cut -d'|' -f1)
+                # 数值比较（排序键都是整数格式的字符串，可以直接数值比较）
+                local key1_num=$(echo "$key1" | awk '{print int($1)}' 2>/dev/null || echo "9999999")
+                local key2_num=$(echo "$key2" | awk '{print int($1)}' 2>/dev/null || echo "9999999")
+                if [ "$key1_num" -gt "$key2_num" ] 2>/dev/null; then
+                    local temp="${sorted_primary[$j]}"
+                    sorted_primary[$j]="${sorted_primary[$j+1]}"
+                    sorted_primary[$j+1]="$temp"
+                fi
+            done
+        done
+        
+        # 重建主源数组（按下载速度排序，N/A 在后）
+        primary_sources=()
+        for item in "${sorted_primary[@]}"; do
+            local source=$(echo "$item" | LC_ALL=C cut -d'|' -f2)
+            local latency=$(echo "$item" | LC_ALL=C cut -d'|' -f3)
+            local speed=$(echo "$item" | LC_ALL=C cut -d'|' -f4)
+            local has_pkg=$(echo "$item" | LC_ALL=C cut -d'|' -f5)
+            primary_sources+=("${source}|${latency}|${speed}|${has_pkg}")
+        done
+    fi
+    
+    # 显示检测结果表格
+    echo ""
+    print_info "检测结果汇总:"
+    echo ""
+    
+    # 打印表格标题（中文名称放到最后一列）
+    printf "%-6s %-18s %-12s %-12s %-12s %s\n" "序号" "源标识" "状态" "延迟" "下载速度" "源名称"
+    printf "%-6s %-18s %-12s %-12s %-12s %s\n" "------" "------------------" "------------" "------------" "------------" "------------------------------"
+    
+    local index=1
+    
+    # 显示主源（按下载速度排序，N/A 在后）
+    for item in "${primary_sources[@]}"; do
+        local source=$(echo "$item" | LC_ALL=C cut -d'|' -f1)
+        local latency=$(echo "$item" | LC_ALL=C cut -d'|' -f2)
+        local speed=$(echo "$item" | LC_ALL=C cut -d'|' -f3)
+        local display_name=$(get_source_display_name "$source")
+        
+        # 格式化下载速度显示
+        local speed_display="N/A"
+        if [ -n "$speed" ] && [ "$speed" != "0" ] && [ "$speed" != "0.00" ]; then
+            # 使用 awk 检查速度是否大于 0
+            if [ "$(echo "$speed" | awk '{if($1>0) print 1; else print 0}')" = "1" ]; then
+                speed_display="${speed}MB/s"
+            fi
+        fi
+        
+        printf "%-6s %-18s %-12s %-12s %-12s %s\n" "$index" "$source" "✓ 可用" "${latency}ms" "$speed_display" "$display_name"
+        ((index++))
+    done
+    
+    # 不再显示补充源（网络不可用或延迟N/A的源不加入配置）
+    
+    # 显示不可用的源（从 all_test_results 中提取）
+    # all_test_results 格式：源名|延迟|下载速度|状态|类型
+    for result in "${all_test_results[@]}"; do
+        local source=$(echo "$result" | LC_ALL=C cut -d'|' -f1)
+        local status=$(echo "$result" | LC_ALL=C cut -d'|' -f4)  # 状态在第4个字段
+        
+        # 检查是否已经在主源中
+        local found=false
+        for item in "${primary_sources[@]}"; do
+            local existing_source=$(echo "$item" | LC_ALL=C cut -d'|' -f1)
+            if [ "$existing_source" = "$source" ]; then
+                found=true
+                break
+            fi
+        done
+        
+        if [ "$status" = "不可用" ] && [ "$found" = "false" ]; then
+            local display_name=$(get_source_display_name "$source")
+            
+            printf "%-6s %-18s %-12s %-12s %-12s %s\n" "$index" "$source" "✗ 不可用" "N/A" "N/A" "$display_name"
+            ((index++))
+        fi
+    done
+    
+    echo ""
+    
+    if [ ${#primary_sources[@]} -gt 0 ]; then
+        local fastest_source=$(echo "${primary_sources[0]}" | LC_ALL=C cut -d'|' -f1)
+        local fastest_latency=$(echo "${primary_sources[0]}" | LC_ALL=C cut -d'|' -f2)
+        local fastest_speed=$(echo "${primary_sources[0]}" | LC_ALL=C cut -d'|' -f3)
+        local speed_info=""
+        if [ -n "$fastest_speed" ] && [ "$fastest_speed" != "0" ] && [ "$fastest_speed" != "0.00" ]; then
+            if [ "$(echo "$fastest_speed" | awk '{if($1>0) print 1; else print 0}')" = "1" ]; then
+                speed_info="，下载速度: ${fastest_speed}MB/s"
+            fi
+        fi
+        print_info "最快的源: $fastest_source (延迟: ${fastest_latency}ms${speed_info})"
+        echo ""
+    fi
+    
+    # 返回排序后的源列表（通过全局变量）
+    # 格式：主源（按下载速度排序，N/A 在后），网络不可用或延迟N/A的源不加入配置
+    AVAILABLE_SOURCES=()
+    SOURCE_SPEEDS=()
+    SOURCE_HAS_PACKAGE=()
+    
+    # 添加主源（包括能响应但无法下载包的源）
+    for item in "${primary_sources[@]}"; do
+        local source=$(echo "$item" | LC_ALL=C cut -d'|' -f1)
+        local latency=$(echo "$item" | LC_ALL=C cut -d'|' -f2)
+        local has_pkg=$(echo "$item" | LC_ALL=C cut -d'|' -f4)
+        AVAILABLE_SOURCES+=("$source")
+        SOURCE_SPEEDS+=("$latency")
+        SOURCE_HAS_PACKAGE+=("$has_pkg")
+    done
+    
+    # 不再添加补充源到配置中（网络不可用或延迟N/A的源不加入配置）
+    
+    if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
+        local fastest_source="${AVAILABLE_SOURCES[0]}"
+        local fastest_speed="${SOURCE_SPEEDS[0]}"
+        FASTEST_SOURCE="$fastest_source"
+        print_info "最快的源: $fastest_source (${fastest_speed}ms)"
+    fi
+}
+
+# 测试所有源的连通性并选择最快的（旧版本，保留作为备用）
+test_all_sources_old() {
+    print_info "正在测试所有 pip 源的连通性..."
+    echo ""
+    
+    local available_sources=()
+    local fastest_source=""
+    local fastest_time=999999
+    
+    for source_name in "${PIP_SOURCE_NAMES[@]}"; do
+        local source_url=$(get_pip_source_url "$source_name")
+        local display_name=$(get_source_display_name "$source_name")
+        
+        if check_network "$source_url" "$display_name"; then
+            print_info "✓ $display_name ($source_name) - 可用"
+            available_sources+=("$source_name")
+            
+            # 测试响应时间（使用与检测相同的方法）
+            if command -v curl &> /dev/null; then
+                local test_url="$source_url"
+                if [[ ! "$test_url" =~ /simple/?$ ]]; then
+                    test_url="${source_url%/}/simple/"
+                fi
+                
+                local start_time=$(date +%s%N)
+                curl -s -o /dev/null --max-time "$TEST_TIMEOUT" -L "$test_url" &> /dev/null
+                local end_time=$(date +%s%N)
+                local duration=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
+                
+                if [ "$duration" -lt "$fastest_time" ] && [ "$duration" -gt 0 ]; then
+                    fastest_time=$duration
+                    fastest_source="$source_name"
+                fi
+            fi
+        else
+            print_warn "✗ $display_name ($source_name) - 不可用"
+        fi
+    done
+    
+    echo ""
+    
+    if [ ${#available_sources[@]} -eq 0 ]; then
+        print_error "所有 pip 源都不可用，请检查网络连接"
+        exit 1
+    fi
+    
+    if [ -n "$fastest_source" ]; then
+        print_info "检测到最快的源: $fastest_source (响应时间: ${fastest_time}ms)"
+    fi
+    
+    # 返回可用的源列表（通过全局变量）
+    AVAILABLE_SOURCES=("${available_sources[@]}")
+    FASTEST_SOURCE="$fastest_source"
+}
+
+# 从现有配置文件中读取源
+read_existing_sources() {
+    local config_file="$1"
+    local existing_sources=()
+    
+    if [ ! -f "$config_file" ]; then
+        EXISTING_SOURCES=()
+        return 0
+    fi
+    
+    # 读取 index-url
+    local index_url=$(grep -E "^[[:space:]]*index-url[[:space:]]*=" "$config_file" 2>/dev/null | sed 's/^[^=]*=[[:space:]]*//' | sed 's/[[:space:]]*$//' | head -1)
+    if [ -n "$index_url" ]; then
+        existing_sources+=("$index_url")
+    fi
+    
+    # 读取 extra-index-url（可能有多行）
+    local in_extra_index=false
+    while IFS= read -r line || [ -n "$line" ]; do
+        # 跳过注释和空行
+        if [[ "$line" =~ ^[[:space:]]*# ]] || [[ -z "${line// }" ]]; then
+            continue
+        fi
+        
+        # 匹配 extra-index-url 行
+        if [[ "$line" =~ ^[[:space:]]*extra-index-url[[:space:]]*=[[:space:]]*(.+) ]]; then
+            in_extra_index=true
+            local urls="${BASH_REMATCH[1]}"
+            # 分割多个 URL（可能在同一行，用空格分隔）
+            for url in $urls; do
+                url=$(echo "$url" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+                if [ -n "$url" ] && [[ "$url" =~ ^https?:// ]]; then
+                    existing_sources+=("$url")
+                fi
+            done
+        elif [[ "$in_extra_index" = "true" ]] && [[ "$line" =~ ^[[:space:]]+https?:// ]]; then
+            # 续行（extra-index-url 的续行）
+            local url=$(echo "$line" | sed 's/^[[:space:]]*//' | sed 's/[[:space:]]*$//')
+            if [ -n "$url" ] && [[ "$url" =~ ^https?:// ]]; then
+                existing_sources+=("$url")
+            fi
+        elif [[ "$line" =~ ^[[:space:]]*\[ ]]; then
+            # 新的配置段开始，结束 extra-index-url
+            in_extra_index=false
+        fi
+    done < "$config_file"
+    
+    # 返回找到的源（通过全局变量）
+    EXISTING_SOURCES=("${existing_sources[@]}")
+}
+
+# 为自定义源生成标识符和显示名称
+generate_custom_source_id() {
+    local url=$1
+    # 使用 URL 的哈希值作为标识符（前8位）
+    if command -v md5sum &> /dev/null; then
+        local hash=$(echo -n "$url" | md5sum 2>/dev/null | cut -c1-8)
+    elif command -v md5 &> /dev/null; then
+        local hash=$(echo -n "$url" | md5 2>/dev/null | cut -c1-8)
+    elif command -v shasum &> /dev/null; then
+        local hash=$(echo -n "$url" | shasum -a 256 2>/dev/null | cut -c1-8)
+    else
+        # 如果没有哈希工具，使用 URL 的简化版本
+        local hash=$(echo -n "$url" | tr -cd 'a-zA-Z0-9' | cut -c1-8)
+    fi
+    echo "custom-${hash}"
+}
+
+# 获取自定义源的显示名称（隐藏密码）
+get_custom_source_display_name() {
+    local url=$1
+    # 如果 URL 包含 @，说明有认证信息，隐藏密码部分
+    if [[ "$url" =~ ^https?://([^:]+):([^@]+)@(.+)$ ]]; then
+        local user="${BASH_REMATCH[1]}"
+        local host="${BASH_REMATCH[3]}"
+        echo "自定义源 (${user}@${host})"
+    elif [[ "$url" =~ ^https?://([^/]+) ]]; then
+        local host="${BASH_REMATCH[1]}"
+        echo "自定义源 (${host})"
+    else
+        echo "自定义源"
+    fi
+}
+
+# 添加自定义源到检测列表
+add_custom_sources_to_list() {
+    if [ ${#EXISTING_SOURCES[@]} -eq 0 ]; then
+        return 0
+    fi
+    
+    print_info "从现有配置中读取到 ${#EXISTING_SOURCES[@]} 个源，正在添加到检测列表..."
+    
+    # 存储自定义源信息：格式为 "标识符|URL|显示名称"
+    local custom_sources=()
+    
+    for url in "${EXISTING_SOURCES[@]}"; do
+        # 检查是否已经在预定义源列表中
+        local found=false
+        for predefined_name in "${PIP_SOURCE_NAMES[@]}"; do
+            local predefined_url=$(get_pip_source_url "$predefined_name" 2>/dev/null)
+            if [ "$url" = "$predefined_url" ]; then
+                found=true
+                break
+            fi
+        done
+        
+        # 如果不在预定义列表中，添加为自定义源
+        if [ "$found" = "false" ] && [ -n "$url" ]; then
+            local source_id=$(generate_custom_source_id "$url")
+            local display_name=$(get_custom_source_display_name "$url")
+            custom_sources+=("${source_id}|${url}|${display_name}")
+            
+            # 添加到源名称列表（放在前面，优先检测，避免丢失）
+            PIP_SOURCE_NAMES=("$source_id" "${PIP_SOURCE_NAMES[@]}")
+        fi
+    done
+    
+    # 存储自定义源信息到全局变量
+    CUSTOM_SOURCES=("${custom_sources[@]}")
+    
+    if [ ${#custom_sources[@]} -gt 0 ]; then
+        print_info "已添加 ${#custom_sources[@]} 个自定义源到检测列表"
+    fi
+}
+
+# 确定 pip 配置文件路径
+determine_pip_config_path() {
+    # pip 配置文件可能的路径（按优先级）
+    local possible_paths=(
+        "$HOME/.pip/pip.conf"
+        "$HOME/.config/pip/pip.conf"
+        "/etc/pip.conf"
+    )
+    
+    # 优先使用用户目录下的配置
+    if [ -f "$HOME/.pip/pip.conf" ]; then
+        PIP_CONFIG_DIR="$HOME/.pip"
+        PIP_CONFIG_FILE="$HOME/.pip/pip.conf"
+    elif [ -f "$HOME/.config/pip/pip.conf" ]; then
+        PIP_CONFIG_DIR="$HOME/.config/pip"
+        PIP_CONFIG_FILE="$HOME/.config/pip/pip.conf"
+    else
+        # 如果文件不存在，创建 ~/.pip/pip.conf（这是最常见的路径）
+        PIP_CONFIG_DIR="$HOME/.pip"
+        PIP_CONFIG_FILE="$HOME/.pip/pip.conf"
+    fi
+    
+    print_info "pip 配置文件路径: $PIP_CONFIG_FILE"
+}
+
+
+# 备份现有配置
+backup_config() {
+    if [ -f "$PIP_CONFIG_FILE" ]; then
+        local backup_file="${PIP_CONFIG_FILE}${BACKUP_SUFFIX}"
+        print_info "备份现有配置到: $backup_file"
+        cp "$PIP_CONFIG_FILE" "$backup_file"
+        if [ $? -eq 0 ]; then
+            print_info "备份成功"
+        else
+            print_error "备份失败"
+            exit 1
+        fi
+    fi
+}
+
+# 准备多源配置（不再需要选择，使用所有可用源）
+prepare_multi_source_config() {
+    # 如果没有可用的源列表，先测试
+    if [ ${#AVAILABLE_SOURCES[@]} -eq 0 ]; then
+        test_all_sources
+    fi
+    
+    if [ ${#AVAILABLE_SOURCES[@]} -eq 0 ]; then
+        print_error "没有可用的 pip 源"
+        exit 1
+    fi
+    
+    print_info "将配置 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）"
+}
+
+# 创建配置目录
+create_config_directory() {
+    if [ ! -d "$PIP_CONFIG_DIR" ]; then
+        print_info "创建配置目录: $PIP_CONFIG_DIR"
+        mkdir -p "$PIP_CONFIG_DIR"
+        if [ $? -ne 0 ]; then
+            print_error "创建配置目录失败"
+            exit 1
+        fi
+    fi
+}
+
+# 确认是否写入配置
+confirm_write_config() {
+    echo ""
+    print_info "准备写入以下配置:"
+    echo ""
+    echo "  配置文件路径: $PIP_CONFIG_FILE"
+    echo "  将配置 ${#AVAILABLE_SOURCES[@]} 个源（按下载速度排序）"
+    if [ -f "$PIP_CONFIG_FILE" ]; then
+        echo "  现有配置将被备份到: ${PIP_CONFIG_FILE}${BACKUP_SUFFIX}"
+    fi
+    echo ""
+    
+    # 显示源列表
+    print_info "源列表:"
+    local index=1
+    local primary_count=0
+    for i in "${!AVAILABLE_SOURCES[@]}"; do
+        local source_name="${AVAILABLE_SOURCES[$i]}"
+        local speed="${SOURCE_SPEEDS[$i]}"
+        local has_package="${SOURCE_HAS_PACKAGE[$i]}"
+        local source_url=$(get_pip_source_url "$source_name")
+        local display_name=$(get_source_display_name "$source_name")
+        
+        if [ "$has_package" = "1" ]; then
+            echo "  $index. $display_name ($source_name) - ${speed}ms [主源]"
+            ((primary_count++))
+        else
+            echo "  $index. $display_name ($source_name) [补充源]"
+        fi
+        ((index++))
+    done
+    echo ""
+    
+    # 显示将要写入的配置内容预览
+    print_info "配置内容预览:"
+    echo ""
+    
+    # 生成配置预览
+    local config_preview="# pip 配置文件\n"
+    config_preview+="# 由 configure-pip-sources.sh 自动生成\n"
+    config_preview+="# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')\n"
+    config_preview+="# 配置了 ${#AVAILABLE_SOURCES[@]} 个源（按下载速度排序）\n\n"
+    config_preview+="[global]\n"
+    
+    # 第一个源作为主源（index-url）
+    if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
+        local first_source="${AVAILABLE_SOURCES[0]}"
+        local first_url=$(get_pip_source_url "$first_source")
+        config_preview+="index-url = $first_url\n"
+    fi
+    
+    # 其他源作为额外源（extra-index-url）
+    if [ ${#AVAILABLE_SOURCES[@]} -gt 1 ]; then
+        config_preview+="extra-index-url ="
+        for i in $(seq 1 $((${#AVAILABLE_SOURCES[@]} - 1))); do
+            local source_name="${AVAILABLE_SOURCES[$i]}"
+            local source_url=$(get_pip_source_url "$source_name")
+            if [ $i -eq 1 ]; then
+                config_preview+=" $source_url"
+            else
+                config_preview+="\n                $source_url"
+            fi
+        done
+        config_preview+="\n"
+    fi
+    
+    # trusted-host（提取主机名，处理带认证信息的 URL）
+    config_preview+="trusted-host ="
+    local first_host=true
+    local seen_hosts=()
+    for source_name in "${AVAILABLE_SOURCES[@]}"; do
+        local source_url=$(get_pip_source_url "$source_name")
+        # 提取主机名，处理带认证信息的 URL（如 https://user:pass@host.com）
+        local host=""
+        if [[ "$source_url" =~ https?://([^@]+)@([^/]+) ]]; then
+            # 带认证信息的 URL
+            host="${BASH_REMATCH[2]}"
+        elif [[ "$source_url" =~ https?://([^/]+) ]]; then
+            # 普通 URL
+            host="${BASH_REMATCH[1]}"
+        fi
+        
+        # 去重（同一个主机只添加一次）
+        if [ -n "$host" ]; then
+            local host_seen=false
+            for seen_host in "${seen_hosts[@]}"; do
+                if [ "$seen_host" = "$host" ]; then
+                    host_seen=true
+                    break
+                fi
+            done
+            
+            if [ "$host_seen" = "false" ]; then
+                seen_hosts+=("$host")
+                if [ "$first_host" = "true" ]; then
+                    config_preview+=" $host"
+                    first_host=false
+                else
+                    config_preview+="\n              $host"
+                fi
+            fi
+        fi
+    done
+    config_preview+="\n"
+    
+    echo -e "$config_preview"
+    echo ""
+    
+    # 检查是否可以交互
+    if [ "$IS_INTERACTIVE" = "false" ]; then
+        # 无法交互，自动确认
+        print_info "无法进行交互式确认，自动写入配置..."
+        return 0
+    else
+        # 可以交互，询问用户
+        while true; do
+            read -p "是否要写入此配置? [Y/n] (直接回车默认写入): " -n 1 -r < /dev/tty
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]] || [ -z "$REPLY" ]; then
+                print_info "确认写入配置..."
+                return 0
+            elif [[ $REPLY =~ ^[Nn]$ ]]; then
+                print_warn "用户取消写入配置"
+                exit 0
+            else
+                print_error "无效输入，请输入 Y 或 N"
+            fi
+        done
+    fi
+}
+
+# 写入 pip 配置（多源配置）
+write_pip_config() {
+    print_info "正在写入多源配置..."
+    
+    # 创建配置文件内容
+    {
+        echo "# pip 配置文件"
+        echo "# 由 configure-pip-sources.sh 自动生成"
+        echo "# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
+        echo "# 配置了 ${#AVAILABLE_SOURCES[@]} 个源（按下载速度排序）"
+        echo ""
+        echo "[global]"
+        
+        # 第一个源作为主源（index-url）
+        if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
+            local first_source="${AVAILABLE_SOURCES[0]}"
+            local first_url=$(get_pip_source_url "$first_source")
+            echo "index-url = $first_url"
+        fi
+        
+        # 其他源作为额外源（extra-index-url）
+        if [ ${#AVAILABLE_SOURCES[@]} -gt 1 ]; then
+            echo -n "extra-index-url ="
+            for i in $(seq 1 $((${#AVAILABLE_SOURCES[@]} - 1))); do
+                local source_name="${AVAILABLE_SOURCES[$i]}"
+                local source_url=$(get_pip_source_url "$source_name")
+                if [ $i -eq 1 ]; then
+                    echo " $source_url"
+                else
+                    echo "                $source_url"
+                fi
+            done
+        fi
+        
+        # trusted-host（所有源的主机名，处理带认证信息的 URL）
+        echo -n "trusted-host ="
+        local first_host=true
+        local seen_hosts=()
+        for source_name in "${AVAILABLE_SOURCES[@]}"; do
+            local source_url=$(get_pip_source_url "$source_name")
+            # 提取主机名，处理带认证信息的 URL（如 https://user:pass@host.com）
+            local host=""
+            if [[ "$source_url" =~ https?://([^@]+)@([^/]+) ]]; then
+                # 带认证信息的 URL
+                host="${BASH_REMATCH[2]}"
+            elif [[ "$source_url" =~ https?://([^/]+) ]]; then
+                # 普通 URL
+                host="${BASH_REMATCH[1]}"
+            fi
+            
+            # 去重（同一个主机只添加一次）
+            if [ -n "$host" ]; then
+                local host_seen=false
+                for seen_host in "${seen_hosts[@]}"; do
+                    if [ "$seen_host" = "$host" ]; then
+                        host_seen=true
+                        break
+                    fi
+                done
+                
+                if [ "$host_seen" = "false" ]; then
+                    seen_hosts+=("$host")
+                    if [ "$first_host" = "true" ]; then
+                        echo " $host"
+                        first_host=false
+                    else
+                        echo "              $host"
+                    fi
+                fi
+            fi
+        done
+    } > "$PIP_CONFIG_FILE"
+
+    if [ $? -eq 0 ]; then
+        print_info "pip 多源配置写入成功"
+    else
+        print_error "pip 配置写入失败"
+        exit 1
+    fi
+}
+
+# 验证配置
+verify_config() {
+    print_info "验证配置..."
+    
+    if [ -f "$PIP_CONFIG_FILE" ]; then
+        print_info "配置文件内容:"
+        echo ""
+        cat "$PIP_CONFIG_FILE"
+        echo ""
+        
+        # 尝试读取配置（如果 pip 可用）
+        if command -v pip &> /dev/null; then
+            print_info "使用 pip config list 验证配置:"
+            pip config list 2>/dev/null || print_warn "无法读取 pip 配置（可能 pip 未安装）"
+        else
+            print_warn "未检测到 pip 命令，无法验证配置"
+        fi
+    else
+        print_error "配置文件不存在"
+        exit 1
+    fi
+}
+
+# 显示配置信息
+show_info() {
+    print_info "pip 多源配置完成！"
+    echo ""
+    echo "配置文件路径: $PIP_CONFIG_FILE"
+    echo "已配置 ${#AVAILABLE_SOURCES[@]} 个源:"
+    local index=1
+    for i in "${!AVAILABLE_SOURCES[@]}"; do
+        local source_name="${AVAILABLE_SOURCES[$i]}"
+        local speed="${SOURCE_SPEEDS[$i]}"
+        local has_package="${SOURCE_HAS_PACKAGE[$i]}"
+        local source_url=$(get_pip_source_url "$source_name")
+        local display_name=$(get_source_display_name "$source_name")
+        
+        if [ "$has_package" = "1" ]; then
+            echo "  $index. $display_name ($source_name) - ${speed}ms [主源]"
+        else
+            echo "  $index. $display_name ($source_name) [补充源]"
+        fi
+        ((index++))
+    done
+    if [ -f "${PIP_CONFIG_FILE}${BACKUP_SUFFIX}" ]; then
+        echo ""
+        echo "备份文件: ${PIP_CONFIG_FILE}${BACKUP_SUFFIX}"
+    fi
+    echo ""
+    print_info "要使用此配置，请运行: pip install <package_name>"
+    echo ""
+    print_info "pip 会按顺序尝试这些源，优先使用最快的源"
+    echo ""
+}
+
+# 主函数
+main() {
+    # 解析命令行参数
+    parse_args "$@"
+    
+    # 如果显示帮助，直接退出
+    if [ "$SHOW_HELP" = "true" ]; then
+        show_help
+        exit 0
+    fi
+    
+    # 如果指定了单个源，提示用户现在支持多源配置
+    if [ -n "$SELECTED_SOURCE" ]; then
+        print_warn "注意：脚本现在支持多源配置，将自动检测并配置所有可用源"
+        print_info "如果只想使用单个源，可以手动编辑配置文件"
+        echo ""
+    fi
+    
+    print_info "开始配置 pip 多源..."
+    echo ""
+    
+    # 确定配置文件路径
+    determine_pip_config_path
+    
+    # 从现有配置中读取源（避免源丢失）
+    read_existing_sources "$PIP_CONFIG_FILE"
+    
+    # 将自定义源添加到检测列表
+    add_custom_sources_to_list
+    
+    # 测试所有源的连通性和下载速度
+    test_all_sources
+    
+    # 准备多源配置
+    prepare_multi_source_config
+    
+    # 备份现有配置
+    backup_config
+    
+    # 创建配置目录
+    create_config_directory
+    
+    # 确认是否写入配置
+    confirm_write_config
+    
+    # 写入配置
+    write_pip_config
+    
+    # 验证配置
+    verify_config
+    
+    # 显示信息
+    show_info
+    
+    print_info "脚本执行完成！"
+}
+
+# 执行主函数
+main "$@"
