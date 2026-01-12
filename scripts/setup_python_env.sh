@@ -121,40 +121,50 @@ select_python_version() {
     done
     echo ""
     
-    # 使用read实现交互式选择，避免select命令自动显示列表
-    while true; do
-        read -p "请选择版本 [1-$count, 直接回车使用默认 $DEFAULT_VERSION]: " choice
-        
-        # 如果直接回车，使用默认版本
-        if [ -z "$choice" ] || [ "$choice" = "" ]; then
-            PYTHON_VERSION="$DEFAULT_VERSION"
-            VERSION_NUM=$(echo "$DEFAULT_VERSION" | tr -d '.')
-            ENV_PATH="$HOME/opt/py${VERSION_NUM}"
-            print_info "使用默认版本: Python $PYTHON_VERSION"
-            print_info "环境路径: $ENV_PATH"
-            break
-        fi
-        
-        # 检查输入是否为有效数字
-        if [[ "$choice" =~ ^[0-9]+$ ]]; then
-            if [ "$choice" -ge 1 ] && [ "$choice" -le "$count" ]; then
-                # 数组索引从0开始，所以需要减1
-                local selected_index=$((choice - 1))
-                PYTHON_VERSION="${PYTHON_VERSIONS[$selected_index]}"
-                VERSION_NUM=$(echo "$PYTHON_VERSION" | tr -d '.')
+    # 检查是否为交互式终端
+    if [ ! -t 0 ]; then
+        # 非交互式终端（通过管道执行），自动使用默认版本
+        print_info "检测到非交互式终端，自动使用默认版本: Python $DEFAULT_VERSION"
+        PYTHON_VERSION="$DEFAULT_VERSION"
+        VERSION_NUM=$(echo "$DEFAULT_VERSION" | tr -d '.')
+        ENV_PATH="$HOME/opt/py${VERSION_NUM}"
+        print_info "环境路径: $ENV_PATH"
+    else
+        # 交互式终端，使用read从/dev/tty读取输入
+        while true; do
+            read -p "请选择版本 [1-$count, 直接回车使用默认 $DEFAULT_VERSION]: " choice < /dev/tty
+            
+            # 如果直接回车，使用默认版本
+            if [ -z "$choice" ] || [ "$choice" = "" ]; then
+                PYTHON_VERSION="$DEFAULT_VERSION"
+                VERSION_NUM=$(echo "$DEFAULT_VERSION" | tr -d '.')
                 ENV_PATH="$HOME/opt/py${VERSION_NUM}"
-                print_info "已选择 Python $PYTHON_VERSION"
+                print_info "使用默认版本: Python $PYTHON_VERSION"
                 print_info "环境路径: $ENV_PATH"
                 break
+            fi
+            
+            # 检查输入是否为有效数字
+            if [[ "$choice" =~ ^[0-9]+$ ]]; then
+                if [ "$choice" -ge 1 ] && [ "$choice" -le "$count" ]; then
+                    # 数组索引从0开始，所以需要减1
+                    local selected_index=$((choice - 1))
+                    PYTHON_VERSION="${PYTHON_VERSIONS[$selected_index]}"
+                    VERSION_NUM=$(echo "$PYTHON_VERSION" | tr -d '.')
+                    ENV_PATH="$HOME/opt/py${VERSION_NUM}"
+                    print_info "已选择 Python $PYTHON_VERSION"
+                    print_info "环境路径: $ENV_PATH"
+                    break
+                else
+                    print_error "无效选择 '$choice'，请输入 1-$count 之间的数字"
+                    echo ""
+                fi
             else
-                print_error "无效选择 '$choice'，请输入 1-$count 之间的数字"
+                print_error "无效输入 '$choice'，请输入数字 1-$count"
                 echo ""
             fi
-        else
-            print_error "无效输入 '$choice'，请输入数字 1-$count"
-            echo ""
-        fi
-    done
+        done
+    fi
     
     echo ""
 }
@@ -171,8 +181,18 @@ create_directory() {
 create_venv() {
     if [ -d "$ENV_PATH" ]; then
         print_warn "Python环境已存在: $ENV_PATH"
-        read -p "是否要删除并重新创建? [y/N] (直接回车默认不删除，继续安装包): " -n 1 -r
-        echo
+        
+        # 检查是否为交互式终端
+        if [ ! -t 0 ]; then
+            # 非交互式终端（通过管道执行），默认不删除，继续安装包
+            print_info "检测到非交互式终端，保留现有环境，继续安装包..."
+            return 0
+        else
+            # 交互式终端，询问用户
+            read -p "是否要删除并重新创建? [y/N] (直接回车默认不删除，继续安装包): " -n 1 -r < /dev/tty
+            echo
+        fi
+        
         # 只有明确输入 y 或 Y 时才删除，其他情况（包括回车、空输入、N等）都默认不删除，继续执行
         if [[ $REPLY =~ ^[Yy]$ ]]; then
             print_info "删除现有环境..."
