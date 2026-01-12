@@ -19,6 +19,23 @@ DEFAULT_VERSION="3.12"
 PYTHON_VERSIONS=("3.14" "3.13" "3.12" "3.11" "3.10" "3.9" "3.8")
 PACKAGES=("funbuild" "funinstall" "funsecret")
 
+# 检测是否为交互式终端（在脚本开始时检测一次）
+# 优先级：环境变量 > 实际检测
+# 可以通过设置 NONINTERACTIVE=1 强制非交互模式
+if [ "${NONINTERACTIVE:-}" = "1" ]; then
+    IS_INTERACTIVE=false
+elif [ -t 0 ] && [ -t 1 ]; then
+    # stdin 和 stdout 都是终端，且可以访问 /dev/tty
+    if [ -c /dev/tty ] 2>/dev/null; then
+        IS_INTERACTIVE=true
+    else
+        IS_INTERACTIVE=false
+    fi
+else
+    # 通过管道执行（curl | bash），stdin 不是终端
+    IS_INTERACTIVE=false
+fi
+
 # 打印带颜色的消息
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
@@ -31,6 +48,7 @@ print_warn() {
 print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
+
 
 # 检查uv是否安装，不存在则自动安装
 check_uv() {
@@ -122,7 +140,7 @@ select_python_version() {
     echo ""
     
     # 检查是否为交互式终端
-    if [ ! -t 0 ]; then
+    if [ "$IS_INTERACTIVE" = "false" ]; then
         # 非交互式终端（通过管道执行），自动使用默认版本
         print_info "检测到非交互式终端，自动使用默认版本: Python $DEFAULT_VERSION"
         PYTHON_VERSION="$DEFAULT_VERSION"
@@ -183,7 +201,7 @@ create_venv() {
         print_warn "Python环境已存在: $ENV_PATH"
         
         # 检查是否为交互式终端
-        if [ ! -t 0 ]; then
+        if [ "$IS_INTERACTIVE" = "false" ]; then
             # 非交互式终端（通过管道执行），默认不删除，继续安装包
             print_info "检测到非交互式终端，保留现有环境，继续安装包..."
             return 0
