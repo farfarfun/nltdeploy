@@ -1033,6 +1033,30 @@ backup_config() {
         cp "$PIP_CONFIG_FILE" "$backup_file"
         if [ $? -eq 0 ]; then
             print_info "备份成功"
+            
+            # 清理旧备份，只保留最近3份
+            local backup_base=$(basename "$PIP_CONFIG_FILE")
+            local backup_files=()
+            
+            # 使用 ls -t 按修改时间排序（最新的在前），兼容 macOS 和 Linux
+            while IFS= read -r file; do
+                [ -n "$file" ] && [ -f "$file" ] && backup_files+=("$file")
+            done < <(ls -t "$PIP_CONFIG_DIR"/"${backup_base}".backup.* 2>/dev/null)
+            
+            # 如果备份文件超过3个，删除最旧的
+            local backup_count=${#backup_files[@]}
+            if [ $backup_count -gt 3 ]; then
+                local to_delete=$((backup_count - 3))
+                print_info "发现 $backup_count 个备份文件，保留最近3份，删除 $to_delete 个旧备份..."
+                for ((i=3; i<backup_count; i++)); do
+                    if [ -f "${backup_files[$i]}" ]; then
+                        rm -f "${backup_files[$i]}"
+                        if [ $? -eq 0 ]; then
+                            print_info "已删除旧备份: $(basename "${backup_files[$i]}")"
+                        fi
+                    fi
+                done
+            fi
         else
             print_error "备份失败"
             exit 1
@@ -1067,8 +1091,8 @@ create_config_directory() {
     fi
 }
 
-# 确认是否写入配置
-confirm_write_config() {
+# 显示配置信息（不再需要确认）
+show_config_info() {
     echo ""
     print_info "准备写入以下配置:"
     echo ""
@@ -1189,10 +1213,6 @@ confirm_write_config() {
     
     echo -e "$config_preview"
     echo ""
-    
-    # 直接写入配置，不询问用户确认
-    print_info "准备写入配置..."
-    return 0
 }
 
 # 写入 pip 配置（多源配置）
@@ -1390,10 +1410,10 @@ main() {
     # 创建配置目录
     create_config_directory
     
-    # 确认是否写入配置
-    confirm_write_config
+    # 显示配置信息
+    show_config_info
     
-    # 写入配置
+    # 直接写入配置
     write_pip_config
     
     # 验证配置
