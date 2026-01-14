@@ -1039,9 +1039,10 @@ backup_config() {
             local backup_files=()
             
             # 使用 ls -t 按修改时间排序（最新的在前），兼容 macOS 和 Linux
+            # 直接使用 ls -t，简单可靠，避免 null 字节问题
             while IFS= read -r file; do
                 [ -n "$file" ] && [ -f "$file" ] && backup_files+=("$file")
-            done < <(ls -t "$PIP_CONFIG_DIR"/"${backup_base}".backup.* 2>/dev/null)
+            done < <(ls -t "$PIP_CONFIG_DIR"/"${backup_base}".backup.* 2>/dev/null || true)
             
             # 如果备份文件超过3个，删除最旧的
             local backup_count=${#backup_files[@]}
@@ -1091,77 +1092,44 @@ create_config_directory() {
     fi
 }
 
-# 显示配置信息（不再需要确认）
-show_config_info() {
-    echo ""
-    print_info "准备写入以下配置:"
-    echo ""
-    echo "  配置文件路径: $PIP_CONFIG_FILE"
-    echo "  将配置 ${#AVAILABLE_SOURCES[@]} 个源（按下载速度排序）"
-    if [ -f "$PIP_CONFIG_FILE" ]; then
-        echo "  现有配置将被备份到: ${PIP_CONFIG_FILE}${BACKUP_SUFFIX}"
-    fi
-    echo ""
+
+# 生成 pip 配置文件内容
+generate_pip_config_content() {
+    local config_content=""
     
-    # 显示源列表
-    print_info "源列表:"
-    local index=1
-    local primary_count=0
-    for i in "${!AVAILABLE_SOURCES[@]}"; do
-        local source_name="${AVAILABLE_SOURCES[$i]}"
-        local speed="${SOURCE_SPEEDS[$i]}"
-        local has_package="${SOURCE_HAS_PACKAGE[$i]}"
-        local source_url=$(get_pip_source_url "$source_name")
-        local display_name=$(get_source_display_name "$source_name")
-        
-        if [ "$has_package" = "1" ]; then
-            echo "  $index. $display_name ($source_name) - ${speed}ms [主源]"
-            ((primary_count++))
-        else
-            echo "  $index. $display_name ($source_name) [补充源]"
-        fi
-        ((index++))
-    done
-    echo ""
-    
-    # 显示将要写入的配置内容预览
-    print_info "配置内容预览:"
-    echo ""
-    
-    # 生成配置预览
-    local config_preview="# pip 配置文件\n"
-    config_preview+="# 由 configure-pip-sources.sh 自动生成\n"
-    config_preview+="# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')\n"
-    config_preview+="# 配置了 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）\n"
+    # 文件头注释
+    config_content+="# pip 配置文件\n"
+    config_content+="# 由 configure-pip-sources.sh 自动生成\n"
+    config_content+="# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')\n"
+    config_content+="# 配置了 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）\n"
     if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
-        config_preview+="# 另有 ${#UNAVAILABLE_SOURCES[@]} 个不可用源已保存到注释中（避免丢失）\n"
+        config_content+="# 另有 ${#UNAVAILABLE_SOURCES[@]} 个不可用源已保存到注释中（避免丢失）\n"
     fi
-    config_preview+="\n[global]\n"
+    config_content+="\n[global]\n"
     
     # 第一个源作为主源（index-url）
     if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
         local first_source="${AVAILABLE_SOURCES[0]}"
         local first_url=$(get_pip_source_url "$first_source")
-        config_preview+="index-url = $first_url\n"
+        config_content+="index-url = $first_url\n"
     fi
     
     # 其他源作为额外源（extra-index-url）
     if [ ${#AVAILABLE_SOURCES[@]} -gt 1 ]; then
-        config_preview+="extra-index-url ="
+        config_content+="extra-index-url ="
         for i in $(seq 1 $((${#AVAILABLE_SOURCES[@]} - 1))); do
             local source_name="${AVAILABLE_SOURCES[$i]}"
             local source_url=$(get_pip_source_url "$source_name")
             if [ $i -eq 1 ]; then
-                config_preview+=" $source_url"
+                config_content+=" $source_url\n"
             else
-                config_preview+="\n                $source_url"
+                config_content+="                $source_url\n"
             fi
         done
-        config_preview+="\n"
     fi
     
-    # trusted-host（提取主机名，处理带认证信息的 URL）
-    config_preview+="trusted-host ="
+    # trusted-host（所有源的主机名，处理带认证信息的 URL）
+    config_content+="trusted-host ="
     local first_host=true
     local seen_hosts=()
     for source_name in "${AVAILABLE_SOURCES[@]}"; do
@@ -1189,128 +1157,114 @@ show_config_info() {
             if [ "$host_seen" = "false" ]; then
                 seen_hosts+=("$host")
                 if [ "$first_host" = "true" ]; then
-                    config_preview+=" $host"
+                    config_content+=" $host\n"
                     first_host=false
                 else
-                    config_preview+="\n              $host"
+                    config_content+="              $host\n"
                 fi
             fi
         fi
     done
-    config_preview+="\n"
+    config_content+="\n"
     
-    # 添加不可用源的预览（注释格式）
+    # 保存不可用的源到注释中（避免因检测问题丢失）
+    # 格式：# unavailable-source: URL  # 说明
     if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
-        config_preview+="# 以下源在检测时不可用，但已保存以避免丢失（可能是临时网络问题）\n"
-        config_preview+="# 如果这些源恢复可用，下次运行脚本时会自动检测并启用\n"
+        config_content+="# 以下源在检测时不可用，但已保存以避免丢失（可能是临时网络问题）\n"
+        config_content+="# 如果这些源恢复可用，下次运行脚本时会自动检测并启用\n"
         for source_name in "${UNAVAILABLE_SOURCES[@]}"; do
             local source_url=$(get_pip_source_url "$source_name")
             local display_name=$(get_source_display_name "$source_name")
-            config_preview+="# unavailable-source: $source_url  # $display_name ($source_name)\n"
+            config_content+="# unavailable-source: $source_url  # $display_name ($source_name)\n"
         done
-        config_preview+="\n"
+        config_content+="\n"
     fi
     
-    echo -e "$config_preview"
-    echo ""
+    # 输出配置内容
+    printf "%b" "$config_content"
 }
+
 
 # 写入 pip 配置（多源配置）
 write_pip_config() {
     print_info "正在写入多源配置..."
     
-    # 创建配置文件内容
-    {
-        echo "# pip 配置文件"
-        echo "# 由 configure-pip-sources.sh 自动生成"
-        echo "# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')"
-        echo "# 配置了 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）"
-        if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
-            echo "# 另有 ${#UNAVAILABLE_SOURCES[@]} 个不可用源已保存到注释中（避免丢失）"
+    # 确保配置目录存在
+    if [ ! -d "$PIP_CONFIG_DIR" ]; then
+        print_info "创建配置目录: $PIP_CONFIG_DIR"
+        if ! mkdir -p "$PIP_CONFIG_DIR" 2>&1; then
+            print_error "创建配置目录失败: $PIP_CONFIG_DIR"
+            print_error "请检查目录权限或手动创建目录: mkdir -p $PIP_CONFIG_DIR"
+            exit 1
         fi
-        echo ""
-        echo "[global]"
-        
-        # 第一个源作为主源（index-url）
-        if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
-            local first_source="${AVAILABLE_SOURCES[0]}"
-            local first_url=$(get_pip_source_url "$first_source")
-            echo "index-url = $first_url"
-        fi
-        
-        # 其他源作为额外源（extra-index-url）
-        if [ ${#AVAILABLE_SOURCES[@]} -gt 1 ]; then
-            echo -n "extra-index-url ="
-            for i in $(seq 1 $((${#AVAILABLE_SOURCES[@]} - 1))); do
-                local source_name="${AVAILABLE_SOURCES[$i]}"
-                local source_url=$(get_pip_source_url "$source_name")
-                if [ $i -eq 1 ]; then
-                    echo " $source_url"
-                else
-                    echo "                $source_url"
-                fi
-            done
-        fi
-        
-        # trusted-host（所有源的主机名，处理带认证信息的 URL）
-        echo -n "trusted-host ="
-        local first_host=true
-        local seen_hosts=()
-        for source_name in "${AVAILABLE_SOURCES[@]}"; do
-            local source_url=$(get_pip_source_url "$source_name")
-            # 提取主机名，处理带认证信息的 URL（如 https://user:pass@host.com）
-            local host=""
-            if [[ "$source_url" =~ https?://([^@]+)@([^/]+) ]]; then
-                # 带认证信息的 URL
-                host="${BASH_REMATCH[2]}"
-            elif [[ "$source_url" =~ https?://([^/]+) ]]; then
-                # 普通 URL
-                host="${BASH_REMATCH[1]}"
-            fi
-            
-            # 去重（同一个主机只添加一次）
-            if [ -n "$host" ]; then
-                local host_seen=false
-                for seen_host in "${seen_hosts[@]}"; do
-                    if [ "$seen_host" = "$host" ]; then
-                        host_seen=true
-                        break
-                    fi
-                done
-                
-                if [ "$host_seen" = "false" ]; then
-                    seen_hosts+=("$host")
-                    if [ "$first_host" = "true" ]; then
-                        echo " $host"
-                        first_host=false
-                    else
-                        echo "              $host"
-                    fi
-                fi
-            fi
-        done
-        echo ""
-        
-        # 保存不可用的源到注释中（避免因检测问题丢失）
-        # 格式：# unavailable-source: URL  # 说明
-        if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
-            echo "# 以下源在检测时不可用，但已保存以避免丢失（可能是临时网络问题）"
-            echo "# 如果这些源恢复可用，下次运行脚本时会自动检测并启用"
-            for source_name in "${UNAVAILABLE_SOURCES[@]}"; do
-                local source_url=$(get_pip_source_url "$source_name")
-                local display_name=$(get_source_display_name "$source_name")
-                echo "# unavailable-source: $source_url  # $display_name ($source_name)"
-            done
-            echo ""
-        fi
-    } > "$PIP_CONFIG_FILE"
-
-    if [ $? -eq 0 ]; then
-        print_info "pip 多源配置写入成功"
-    else
-        print_error "pip 配置写入失败"
+    fi
+    
+    # 检查目录是否可写
+    if [ ! -w "$PIP_CONFIG_DIR" ]; then
+        print_error "配置目录不可写: $PIP_CONFIG_DIR"
+        print_error "请检查目录权限: ls -ld $PIP_CONFIG_DIR"
         exit 1
     fi
+    
+    # 生成配置内容
+    local config_content=""
+    config_content=$(generate_pip_config_content)
+    
+    # 创建临时文件，使用更安全的路径
+    local temp_file="${PIP_CONFIG_DIR}/pip.conf.tmp.$$"
+    
+    # 使用 printf 写入文件，更可靠
+    if ! printf "%b" "$config_content" > "$temp_file" 2>&1; then
+        print_error "pip 配置写入失败（无法写入临时文件: $temp_file）"
+        print_error "错误详情: $(cat "$temp_file" 2>&1 | head -5)"
+        [ -f "$temp_file" ] && rm -f "$temp_file" 2>/dev/null
+        exit 1
+    fi
+    
+    # 检查临时文件是否存在
+    if [ ! -f "$temp_file" ]; then
+        print_error "pip 配置写入失败（临时文件不存在: $temp_file）"
+        print_error "可能的原因：目录权限不足或磁盘空间不足"
+        exit 1
+    fi
+    
+    # 检查临时文件是否有内容
+    if [ ! -s "$temp_file" ]; then
+        print_error "pip 配置写入失败（临时文件为空）"
+        rm -f "$temp_file" 2>/dev/null
+        exit 1
+    fi
+    
+    # 将临时文件移动到目标位置（原子操作）
+    local mv_output=""
+    if ! mv_output=$(mv "$temp_file" "$PIP_CONFIG_FILE" 2>&1); then
+        print_error "pip 配置写入失败（无法移动到目标位置: $PIP_CONFIG_FILE）"
+        if [ -n "$mv_output" ]; then
+            print_error "移动错误: $mv_output"
+        fi
+        print_error "可能的原因：目标目录权限不足或目标文件被锁定"
+        [ -f "$temp_file" ] && rm -f "$temp_file" 2>/dev/null
+        exit 1
+    fi
+    
+    # 验证最终文件是否存在
+    if [ ! -f "$PIP_CONFIG_FILE" ]; then
+        print_error "pip 配置写入失败（目标文件不存在: $PIP_CONFIG_FILE）"
+        exit 1
+    fi
+    
+    # 简单校验：检查文件是否可读且非空
+    if [ ! -r "$PIP_CONFIG_FILE" ]; then
+        print_error "pip 配置写入失败（目标文件不可读: $PIP_CONFIG_FILE）"
+        exit 1
+    fi
+    
+    if [ ! -s "$PIP_CONFIG_FILE" ]; then
+        print_error "pip 配置写入失败（目标文件为空）"
+        exit 1
+    fi
+    
+    print_info "pip 多源配置写入成功"
 }
 
 # 验证配置
@@ -1409,9 +1363,6 @@ main() {
     
     # 创建配置目录
     create_config_directory
-    
-    # 显示配置信息
-    show_config_info
     
     # 直接写入配置
     write_pip_config
