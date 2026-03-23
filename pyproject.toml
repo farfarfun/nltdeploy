@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nltdeploy"
-version = "0.1.1"
+version = "0.1.4"
 description = "快速部署环境的脚本工具集"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -33,12 +33,12 @@ nltdeploy = "nltdeploy.cli:main"
 line-length = 100
 target-version = "py39"
 
-[tool.setuptools.package-dir]
-"" = "src"
-
 [tool.ruff.lint]
 select = [ "E", "F", "I", "N", "W",]
 ignore = []
+
+[tool.setuptools.package-dir]
+"" = "src"
 
 [tool.setuptools.packages.find]
 where = [ "src",]
