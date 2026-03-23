@@ -68,10 +68,10 @@ NONINTERACTIVE=1 ./deploy.sh
 
 ```bash
 # 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 
 # 非交互模式
-NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
 ## 工作流程

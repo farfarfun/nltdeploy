@@ -63,10 +63,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
 # gum：与 README 一致使用 curl -LsSf … | bash（仅远端 URL，不引用仓库内其它脚本路径）。
-# FUNDEPLOY_RAW_BASE 默认与 README 相同；其它 fork 请 export FUNDEPLOY_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>
+# nltdeploy_RAW_BASE 默认与 README 相同；其它 fork 请 export nltdeploy_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>
 # 子脚本 utils-setup.sh 仍识别 GUM_HOME、GUM_TAG、GUM_USE_BREW（请在调用前 export）。
-_FUNDEPLOY_RAW_BASE="${FUNDEPLOY_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/fundeploy/master}"
-_GUM_UTILS_SETUP_URL="${_FUNDEPLOY_RAW_BASE}/scripts/05-utils/utils-setup.sh"
+_nltdeploy_RAW_BASE="${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}"
+_GUM_UTILS_SETUP_URL="${_nltdeploy_RAW_BASE}/scripts/05-utils/utils-setup.sh"
 
 _ensure_gum_self_contained() {
   export PATH="${HOME}/opt/gum/bin:${PATH}"
@@ -84,7 +84,7 @@ _ensure_gum_self_contained() {
 
   echo "未检测到 gum，执行: curl -LsSf ${_GUM_UTILS_SETUP_URL} | bash -s -- gum" >&2
   curl -LsSf "${_GUM_UTILS_SETUP_URL}" | bash -s -- gum || {
-    echo "错误: 远端安装失败（检查网络或设置 FUNDEPLOY_RAW_BASE）。" >&2
+    echo "错误: 远端安装失败（检查网络或设置 nltdeploy_RAW_BASE）。" >&2
     return 1
   }
 

@@ -5,9 +5,9 @@
 
 set -e  # 遇到错误立即退出
 
-# gum：与 README 一致「curl -LsSf … | bash」。FUNDEPLOY_RAW_BASE 可覆盖 raw 根路径。
-_FUNDEPLOY_RAW_BASE="${FUNDEPLOY_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/fundeploy/master}"
-_GUM_UTILS_SETUP_URL="${_FUNDEPLOY_RAW_BASE}/scripts/05-utils/utils-setup.sh"
+# gum：与 README 一致「curl -LsSf … | bash」。nltdeploy_RAW_BASE 可覆盖 raw 根路径。
+_nltdeploy_RAW_BASE="${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}"
+_GUM_UTILS_SETUP_URL="${_nltdeploy_RAW_BASE}/scripts/05-utils/utils-setup.sh"
 
 _ensure_gum_self_contained() {
     export PATH="${HOME}/opt/gum/bin:${PATH}"
@@ -25,7 +25,7 @@ _ensure_gum_self_contained() {
 
     echo "未检测到 gum，执行: curl -LsSf ${_GUM_UTILS_SETUP_URL} | bash -s -- gum" >&2
     curl -LsSf "${_GUM_UTILS_SETUP_URL}" | bash -s -- gum || {
-        echo "错误: 远端安装失败（网络或 FUNDEPLOY_RAW_BASE）。" >&2
+        echo "错误: 远端安装失败（网络或 nltdeploy_RAW_BASE）。" >&2
         return 1
     }
 
