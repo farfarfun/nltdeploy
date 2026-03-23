@@ -4,13 +4,13 @@
 
 import sys
 import click
-from fundeploy.commands import create, init, deploy, status, rollback
+from nltdeploy.commands import create, init, deploy, status, rollback
 
 
 @click.group()
 @click.version_option()
 def main():
-    """fundeploy - 快速部署环境的脚本工具集"""
+    """nltdeploy - 快速部署环境的脚本工具集"""
     pass
 
 

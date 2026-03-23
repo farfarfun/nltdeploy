@@ -16,9 +16,9 @@ def create(python_env, path):
     """创建 Python 环境
     
     示例:
-        fundeploy create py312  - 创建 Python 3.12 环境
-        fundeploy create py311  - 创建 Python 3.11 环境
-        fundeploy create py310  - 创建 Python 3.10 环境
+        nltdeploy create py312  - 创建 Python 3.12 环境
+        nltdeploy create py311  - 创建 Python 3.11 环境
+        nltdeploy create py310  - 创建 Python 3.10 环境
     """
     # 解析 Python 版本
     if python_env.startswith('py'):

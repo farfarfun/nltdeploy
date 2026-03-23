@@ -1,4 +1,4 @@
-# Fundeploy - Python 环境自动化部署工具
+# nltdeploy - Python 环境自动化部署工具
 
 这是一个 Python 环境自动化部署工具集，提供完整的 Python 开发环境自动化配置方案。
 
@@ -19,7 +19,7 @@
 ## 目录结构
 
 ```
-fundeploy/
+nltdeploy/
 ├── README.md                                    # 项目主说明文档
 ├── test-curl-mode.sh                           # curl 模式测试脚本
 └── scripts/
@@ -43,7 +43,7 @@ cd scripts/01-configure-pip-sources
 ./deploy.sh
 
 # 或通过 curl 执行
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
 ### 2. 创建 Python 环境
@@ -56,7 +56,7 @@ cd scripts/02-create-python-env
 ./deploy.sh
 
 # 或通过 curl 执行
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash
 ```
 
 ## 脚本说明
@@ -134,23 +134,23 @@ cd scripts/02-create-python-env
 
 ```bash
 # 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 
 # 非交互模式
-NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
 ### 创建 Python 环境
 
 ```bash
 # 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash
 
 # 指定版本（跳过交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
 
 # 指定版本并安装额外的包
-curl -LsSf https://raw.githubusercontent.com/farfarfun/fundeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
 ```
 
 ## 环境变量
