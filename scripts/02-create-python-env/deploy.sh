@@ -5,6 +5,37 @@
 
 set -e  # 遇到错误立即退出
 
+# gum：与 README 一致「curl -LsSf … | bash」。FUNDEPLOY_RAW_BASE 可覆盖 raw 根路径。
+_FUNDEPLOY_RAW_BASE="${FUNDEPLOY_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/fundeploy/master}"
+_GUM_UTILS_SETUP_URL="${_FUNDEPLOY_RAW_BASE}/scripts/05-utils/utils-setup.sh"
+
+_ensure_gum_self_contained() {
+    export PATH="${HOME}/opt/gum/bin:${PATH}"
+    command -v gum >/dev/null 2>&1 && return 0
+
+    if [[ -x "${HOME}/opt/gum/bin/gum" ]]; then
+        export PATH="${HOME}/opt/gum/bin:${PATH}"
+        command -v gum >/dev/null 2>&1 && return 0
+    fi
+
+    command -v curl >/dev/null 2>&1 || {
+        echo "错误: 需要 curl（README：curl -LsSf … | bash）。" >&2
+        return 1
+    }
+
+    echo "未检测到 gum，执行: curl -LsSf ${_GUM_UTILS_SETUP_URL} | bash -s -- gum" >&2
+    curl -LsSf "${_GUM_UTILS_SETUP_URL}" | bash -s -- gum || {
+        echo "错误: 远端安装失败（网络或 FUNDEPLOY_RAW_BASE）。" >&2
+        return 1
+    }
+
+    export PATH="${HOME}/opt/gum/bin:${PATH}"
+    command -v gum >/dev/null 2>&1 || {
+        echo "错误: gum 仍未可用（预期 ~/opt/gum/bin）。" >&2
+        return 1
+    }
+}
+
 # 颜色输出
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -310,6 +341,7 @@ activate_environment() {
 
 # 主函数
 main() {
+    _ensure_gum_self_contained || exit 1
     print_info "开始设置Python环境..."
     echo ""
     

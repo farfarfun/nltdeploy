@@ -1,23 +1,26 @@
 #!/usr/bin/env bash
 # 本机 Apache Airflow 3.x：安装、启停、DAG 脚手架与常用 CLI 封装（仅 3.x，不兼容 2.x）。
 # 与脚本所在仓库/业务无关，可置于任意目录单独使用。
+# 约定与 .cursor/agents/software-ops.md 对齐：默认 AIRFLOW_HOME=~/opt/airflow，并创建 {bin,etc,data,log}；
+# 依赖 gum：缺省时按 README 同款「curl -LsSf <utils-setup.sh> | bash」安装（不经本地路径调用其它脚本）。
 # 默认将 AIRFLOW_HOME 设为 ~/opt/airflow/（见 resolve_airflow_home）；也可用 AIRFLOW_LOCAL_USE_REPO_HOME 使用脚本旁 .airflow-local。
 # install 会安装核心 + apache-airflow-providers-fab（FAB），并执行 airflow fab-db migrate。
 #
 # 用法：
-#   chmod +x airflow-local.sh
-#   ./airflow-local.sh              # 无参数：菜单选择或输入命令名
-#   ./airflow-local.sh install
-#   ./airflow-local.sh start
-#   ./airflow-local.sh status
-#   ./airflow-local.sh dag-scaffold
-#   ./airflow-local.sh dags-list
-#   ./airflow-local.sh trigger example_minimal
-#   ./airflow-local.sh users-create              # 交互式（或传参同 airflow users create）
-#   ./airflow-local.sh users-list                # 列举用户（同 airflow users list）
-#   ./airflow-local.sh users-reset-password      # 重置密码（同 airflow users reset-password）
-#   ./airflow-local.sh http-trigger <dag_id> [payload.json]   # HTTP 触发 DAG（见下「HTTP 触发」）
-#   ./airflow-local.sh stop
+#   chmod +x airflow-setup.sh
+#   ./airflow-setup.sh              # 无参数：gum 菜单
+#   ./airflow-setup.sh install
+#   ./airflow-setup.sh start
+#   ./airflow-setup.sh status
+#   ./airflow-setup.sh dag-scaffold
+#   ./airflow-setup.sh dags-list
+#   ./airflow-setup.sh trigger example_minimal
+#   ./airflow-setup.sh users-create              # 交互式（或传参同 airflow users create）
+#   ./airflow-setup.sh users-list                # 列举用户（同 airflow users list）
+#   ./airflow-setup.sh users-reset-password      # 重置密码（同 airflow users reset-password）
+#   ./airflow-setup.sh http-trigger <dag_id> [payload.json]   # HTTP 触发 DAG（见下「HTTP 触发」）
+#   ./airflow-setup.sh stop
+#   ./airflow-setup.sh uninstall        # 停止进程并删除 AIRFLOW_VENV 与 AIRFLOW_HOME（不可逆）
 #
 # HTTP 触发 DAG（Airflow 3 稳定 API，供其它系统调用；详见官方 Public API）：
 #   文档: https://airflow.apache.org/docs/apache-airflow/stable/security/api.html
@@ -44,6 +47,7 @@
 #   AIRFLOW_API_BASE          http-trigger 用，API 根 URL（默认 http://127.0.0.1:8080）
 #   AIRFLOW_API_USERNAME      http-trigger 用，与 AIRFLOW_API_PASSWORD 一起换 JWT
 #   AIRFLOW_API_PASSWORD
+#   AIRFLOW_UNINSTALL_YES=1   仅在非交互（无 TTY）时配合 uninstall 使用，表示确认删除
 #
 # 官方文档：https://airflow.apache.org/docs/apache-airflow/stable/
 
@@ -56,11 +60,62 @@ AIRFLOW_VERSION="${AIRFLOW_VERSION:-$DEFAULT_AIRFLOW_VERSION}"
 FAB_AUTH_MANAGER_CLASS="airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
+
+# gum：与 README 一致使用 curl -LsSf … | bash（仅远端 URL，不引用仓库内其它脚本路径）。
+# FUNDEPLOY_RAW_BASE 默认与 README 相同；其它 fork 请 export FUNDEPLOY_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>
+# 子脚本 utils-setup.sh 仍识别 GUM_HOME、GUM_TAG、GUM_USE_BREW（请在调用前 export）。
+_FUNDEPLOY_RAW_BASE="${FUNDEPLOY_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/fundeploy/master}"
+_GUM_UTILS_SETUP_URL="${_FUNDEPLOY_RAW_BASE}/scripts/05-utils/utils-setup.sh"
+
+_ensure_gum_self_contained() {
+  export PATH="${HOME}/opt/gum/bin:${PATH}"
+  command -v gum >/dev/null 2>&1 && return 0
+
+  if [[ -x "${HOME}/opt/gum/bin/gum" ]]; then
+    export PATH="${HOME}/opt/gum/bin:${PATH}"
+    command -v gum >/dev/null 2>&1 && return 0
+  fi
+
+  command -v curl >/dev/null 2>&1 || {
+    echo "错误: 需要 curl（README：curl -LsSf … | bash）。" >&2
+    return 1
+  }
+
+  echo "未检测到 gum，执行: curl -LsSf ${_GUM_UTILS_SETUP_URL} | bash -s -- gum" >&2
+  curl -LsSf "${_GUM_UTILS_SETUP_URL}" | bash -s -- gum || {
+    echo "错误: 远端安装失败（检查网络或设置 FUNDEPLOY_RAW_BASE）。" >&2
+    return 1
+  }
+
+  export PATH="${HOME}/opt/gum/bin:${PATH}"
+  command -v gum >/dev/null 2>&1 || {
+    echo "错误: gum 仍未可用（预期 ~/opt/gum/bin）。" >&2
+    return 1
+  }
+}
+
+say_info() {
+  gum style --foreground 212 "$*"
+}
+
+say_warn() {
+  gum style --foreground 214 "$*" >&2
+}
+
+# 破坏性/不可逆操作前确认。非交互 stdin（无 TTY）时自动通过，便于 CI/脚本。
+confirm_yes() {
+  local prompt="${1:-是否继续？}"
+  if [[ ! -t 0 ]]; then
+    return 0
+  fi
+  gum confirm "$prompt"
+}
 
 usage() {
-  cat <<'USAGE'
-用法: ./airflow-local.sh [command [args...]]
-  不传参数时进入菜单交互：输入序号或命令名（提示符 airflow-local> ）。
+  cat <<EOF
+用法: ./${SCRIPT_NAME} [command [args...]]
+  不传参数时进入 gum 列表菜单。若无 gum，将按 README 用 curl 拉取 utils-setup.sh 安装。
 
 命令:
   install          创建 venv；用官方 constraints 安装 Airflow 核心 + FAB 提供方；db migrate + fab-db migrate
@@ -76,13 +131,13 @@ usage() {
   users-create     创建登录用户：无参数=交互问答；有参数=透传 airflow users create（需 FAB）
   users-list       列举用户（airflow users list；需 FAB + FabAuthManager，脚本在已装 fab 的 venv 内会自动设置）
   users-reset-password  重置用户密码：无参数=交互；有参数=透传 airflow users reset-password
+  uninstall        停止 standalone 并删除 AIRFLOW_VENV 与 AIRFLOW_HOME（不可逆；非 TTY 须设 AIRFLOW_UNINSTALL_YES=1）
   help             显示本说明
 
-交互模式: 显示数字菜单；0=帮助 q=退出 ?=帮助；10/11/12/13 见菜单；13=http-trigger（需先 export AIRFLOW_API_USERNAME 与 PASSWORD）。
-  8、9 可带参数: 8 <dag_id>  或  9 <dag_id> <task_id> <logical_date> …
+交互模式: gum choose；http-trigger 需先 export AIRFLOW_API_USERNAME 与 PASSWORD。
 
 环境变量见脚本头部注释。
-USAGE
+EOF
 }
 
 resolve_airflow_home() {
@@ -105,7 +160,9 @@ DAG_DIR="${AIRFLOW_HOME}/dags"
 PID_FILE="${RUN_DIR}/standalone.pid"
 
 ensure_dirs() {
-  mkdir -p "$RUN_DIR" "$LOG_DIR" "$DAG_DIR"
+  # software-ops：在 AIRFLOW_HOME 下保留标准 opt 子目录（与 Airflow 自带 dags/logs/run 并存）
+  mkdir -p "${AIRFLOW_HOME}/bin" "${AIRFLOW_HOME}/etc" "${AIRFLOW_HOME}/data" "${AIRFLOW_HOME}/log" \
+    "$RUN_DIR" "$LOG_DIR" "$DAG_DIR"
 }
 
 require_python() {
@@ -120,7 +177,7 @@ require_python() {
     echo "当前 Python 版本为 ${major}.${minor}，需要 >= 3.10（参见官方 Prerequisites）。" >&2
     exit 1
   fi
-  echo "使用 Python: $(python3 --version)"
+  say_info "使用 Python: $(python3 --version)"
 }
 
 constraint_url() {
@@ -169,34 +226,41 @@ require_airflow_users_cli() {
 cmd_install() {
   require_python
   ensure_dirs
-  echo "AIRFLOW_HOME=${AIRFLOW_HOME}"
-  echo "AIRFLOW_VENV=${AIRFLOW_VENV}"
+  say_info "AIRFLOW_HOME=${AIRFLOW_HOME}"
+  say_info "AIRFLOW_VENV=${AIRFLOW_VENV}"
+  if [[ -d "$AIRFLOW_VENV" ]] && [[ -x "${AIRFLOW_VENV}/bin/airflow" ]]; then
+    if ! confirm_yes "检测到已有虚拟环境与 airflow，继续将重新安装/升级依赖，是否继续？"; then
+      say_warn "已取消 install。"
+      return 0
+    fi
+  fi
   if [[ ! -d "$AIRFLOW_VENV" ]]; then
-    echo "==> 创建虚拟环境..."
+    say_info "==> 创建虚拟环境..."
     python3 -m venv "$AIRFLOW_VENV"
   fi
   activate_venv
   local curl_url
   curl_url="$(constraint_url)"
-  echo "==> 升级 pip..."
+  say_info "==> 升级 pip..."
   pip install --upgrade pip
-  echo "==> 安装 Airflow 核心 + FAB（apache-airflow + apache-airflow-providers-fab，同一 constraints）..."
+  say_info "==> 安装 Airflow 核心 + FAB（apache-airflow + apache-airflow-providers-fab，同一 constraints）..."
+  # 不用 gum spin 包裹 pip：需完整日志便于排错（software-ops：可观测性优先）
   pip install \
     "apache-airflow==${AIRFLOW_VERSION}" \
     "apache-airflow-providers-fab" \
     --constraint "${curl_url}"
   # 安装 FAB 后需再次激活环境变量（含 AIRFLOW__CORE__AUTH_MANAGER），否则 db migrate / users 仍按默认 SimpleAuthManager
   activate_venv
-  echo "==> 数据库迁移（Airflow 核心）..."
+  say_info "==> 数据库迁移（Airflow 核心）..."
   airflow db migrate
-  echo "==> FAB 元数据迁移（用户/角色表，供 users-list / users-create）..."
+  say_info "==> FAB 元数据迁移（用户/角色表，供 users-list / users-create）..."
   if airflow fab-db migrate; then
     :
   else
     echo "警告: airflow fab-db migrate 未成功，用户相关命令可能异常；请查看上方报错。" >&2
   fi
   if [[ -n "${AIRFLOW_ADMIN_USER:-}" && -n "${AIRFLOW_ADMIN_PASSWORD:-}" && -n "${AIRFLOW_ADMIN_EMAIL:-}" ]]; then
-    echo "==> 创建管理员用户（需 FAB 与 auth 配置；失败可改用 standalone 打印的账号）..."
+    say_info "==> 创建管理员用户（需 FAB 与 auth 配置；失败可改用 standalone 打印的账号）..."
     airflow users create \
       --username "$AIRFLOW_ADMIN_USER" \
       --firstname Admin \
@@ -207,7 +271,7 @@ cmd_install() {
       echo "警告: airflow users create 失败。可依赖 standalone 首次启动时在终端打印的账号。" >&2
     }
   fi
-  echo "安装完成。下一步: $0 start"
+  say_info "安装完成。下一步: $0 start"
 }
 
 process_alive() {
@@ -234,7 +298,7 @@ cmd_start() {
   fi
   activate_venv
   local log_file="${LOG_DIR}/standalone.out.log"
-  echo "==> 启动 airflow standalone（日志: ${log_file}）..."
+  say_info "==> 启动 airflow standalone（日志: ${log_file}）..."
   # nohup 保留 $! 为 airflow 主进程；stop 时按进程组发送信号以清理子进程
   nohup airflow standalone >>"$log_file" 2>&1 &
   local pid=$!
@@ -243,7 +307,9 @@ cmd_start() {
   echo "UI 默认 http://localhost:8080 （见 airflow.cfg）；standalone 首次运行可能在日志中打印管理员账号。"
 }
 
-cmd_stop() {
+# 第二个参数为 1 时跳过确认（供 uninstall 在已二次确认后调用）
+_stop_standalone_impl() {
+  local _no_confirm="${1:-0}"
   local pid
   pid="$(read_pid)"
   if [[ -z "$pid" ]]; then
@@ -256,9 +322,15 @@ cmd_stop() {
     rm -f "$PID_FILE"
     return 0
   fi
+  if [[ "${_no_confirm}" != "1" ]]; then
+    if ! confirm_yes "确认停止 standalone（PID ${pid}）？"; then
+      say_warn "已取消 stop。"
+      return 0
+    fi
+  fi
   local pgid
   pgid="$(ps -o pgid= -p "$pid" 2>/dev/null | tr -d ' ' || true)"
-  echo "==> 停止 standalone（PID ${pid}, PGID ${pgid:-n/a}）..."
+  say_info "==> 停止 standalone（PID ${pid}, PGID ${pgid:-n/a}）..."
   if [[ -n "$pgid" ]] && [[ "$pgid" =~ ^[0-9]+$ ]]; then
     kill -TERM "-${pgid}" 2>/dev/null || kill -TERM "$pid" 2>/dev/null || true
   else
@@ -279,6 +351,59 @@ cmd_stop() {
   fi
   rm -f "$PID_FILE"
   echo "已停止。"
+}
+
+cmd_stop() {
+  _stop_standalone_impl 0
+}
+
+_uninstall_safety_check() {
+  local ap hp
+  if [[ ! -d "$AIRFLOW_HOME" ]] && [[ ! -d "$AIRFLOW_VENV" ]]; then
+    say_warn "AIRFLOW_HOME 与 AIRFLOW_VENV 均不存在，无需卸载。"
+    exit 0
+  fi
+  ap="$(cd "$AIRFLOW_HOME" 2>/dev/null && pwd -P)" || ap="$AIRFLOW_HOME"
+  hp="$(cd "$HOME" && pwd -P)"
+  if [[ "$ap" == "/" || "$ap" == "$hp" ]]; then
+    echo "错误: AIRFLOW_HOME 解析为 / 或 \$HOME，禁止卸载。" >&2
+    exit 1
+  fi
+}
+
+cmd_uninstall() {
+  _uninstall_safety_check
+  say_warn "===== Airflow 本地卸载（不可逆）====="
+  echo "将停止 standalone（若运行中），并删除目录:"
+  echo "  AIRFLOW_VENV=${AIRFLOW_VENV}"
+  echo "  AIRFLOW_HOME=${AIRFLOW_HOME}"
+  echo ""
+
+  if [[ -t 0 ]]; then
+    if ! gum confirm "确认永久删除以上路径？数据库、DAG、日志与虚拟环境将全部移除。"; then
+      echo "已取消。"
+      exit 0
+    fi
+  else
+    if [[ "${AIRFLOW_UNINSTALL_YES:-}" != "1" ]]; then
+      echo "错误: 非交互环境执行 uninstall 必须设置 AIRFLOW_UNINSTALL_YES=1 以确认删除。" >&2
+      exit 1
+    fi
+  fi
+
+  _stop_standalone_impl 1
+
+  say_info "==> 删除虚拟环境与 AIRFLOW_HOME …"
+  if [[ -d "$AIRFLOW_VENV" ]]; then
+    rm -rf "$AIRFLOW_VENV"
+    echo "已删除 ${AIRFLOW_VENV}"
+  fi
+  if [[ -d "$AIRFLOW_HOME" ]]; then
+    rm -rf "$AIRFLOW_HOME"
+    echo "已删除 ${AIRFLOW_HOME}"
+  fi
+
+  say_info "卸载完成。若曾写入 shell profile 中的 gum PATH 等，请自行编辑删除。"
 }
 
 cmd_restart() {
@@ -317,7 +442,7 @@ cmd_dag_scaffold() {
     return 0
   fi
   cat >"$target" <<'PY'
-"""Minimal example DAG (Airflow 3.x). Generated by airflow-local.sh."""
+"""Minimal example DAG (Airflow 3.x). Generated by airflow-setup.sh."""
 from datetime import datetime
 
 from airflow.providers.standard.operators.bash import BashOperator
@@ -376,28 +501,26 @@ cmd_users_create() {
     airflow users create "$@"
     return
   fi
-  echo "==> 创建用户（需启用 Flask AppBuilder 认证管理器；否则命令会失败，见官方 Quick Start 说明）"
+  say_info "==> 创建用户（需启用 Flask AppBuilder 认证管理器；否则命令会失败，见官方 Quick Start 说明）"
   local u p p2 e fn ln role
-  read -r -e -p "用户名 username [admin]: " u || return 1
+  u="$(gum input --placeholder "用户名 username（默认 admin，可留空）")" || return 1
   u="${u:-admin}"
-  read -r -s -p "密码 password: " p || return 1
-  echo ""
-  read -r -s -p "确认密码: " p2 || return 1
-  echo ""
+  p="$(gum input --password --placeholder "密码 password")" || return 1
+  p2="$(gum input --password --placeholder "确认密码")" || return 1
   if [[ "$p" != "$p2" ]]; then
     echo "两次密码不一致。" >&2
     exit 1
   fi
-  read -r -e -p "邮箱 email: " e || return 1
+  e="$(gum input --placeholder "邮箱 email（必填）")" || return 1
   if [[ -z "${e//[$' \t']/}" ]]; then
     echo "邮箱不能为空。" >&2
     exit 1
   fi
-  read -r -e -p "名 firstname [Admin]: " fn || return 1
+  fn="$(gum input --placeholder "名 firstname（默认 Admin，可留空）")" || return 1
   fn="${fn:-Admin}"
-  read -r -e -p "姓 lastname [User]: " ln || return 1
+  ln="$(gum input --placeholder "姓 lastname（默认 User，可留空）")" || return 1
   ln="${ln:-User}"
-  read -r -e -p "角色 role [Admin]（如 Admin / User / Op / Viewer）: " role || return 1
+  role="$(gum input --placeholder "角色 role（默认 Admin，可留空）")" || return 1
   role="${role:-Admin}"
   airflow users create \
     --username "$u" \
@@ -423,14 +546,12 @@ cmd_users_reset_password() {
     airflow users reset-password "$@"
     return
   fi
-  echo "==> 重置用户密码（airflow users reset-password）"
+  say_info "==> 重置用户密码（airflow users reset-password）"
   local u p p2
-  read -r -e -p "用户名 username [admin]: " u || return 1
+  u="$(gum input --placeholder "用户名 username（默认 admin，可留空）")" || return 1
   u="${u:-admin}"
-  read -r -s -p "新密码: " p || return 1
-  echo ""
-  read -r -s -p "确认新密码: " p2 || return 1
-  echo ""
+  p="$(gum input --password --placeholder "新密码")" || return 1
+  p2="$(gum input --password --placeholder "确认新密码")" || return 1
   if [[ "$p" != "$p2" ]]; then
     echo "两次密码不一致。" >&2
     exit 1
@@ -485,7 +606,7 @@ cmd_http_trigger() {
     payload='{"conf":{}}'
   fi
   enc_dag="$(python3 -c 'import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=""))' "$dag_id")"
-  echo "==> POST ${base}/api/v2/dags/${dag_id}/dagRuns"
+  say_info "==> POST ${base}/api/v2/dags/${dag_id}/dagRuns"
   curl -sS -X POST "${base}/api/v2/dags/${enc_dag}/dagRuns" \
     -H "Authorization: Bearer ${token}" \
     -H "Content-Type: application/json" \
@@ -510,6 +631,7 @@ dispatch() {
     users-list) cmd_users_list "$@" ;;
     users-reset-password) cmd_users_reset_password "$@" ;;
     http-trigger) cmd_http_trigger "$@" ;;
+    uninstall) cmd_uninstall ;;
     help|-h|--help) usage ;;
     *)
       echo "未知命令: ${cmd}" >&2
@@ -519,120 +641,65 @@ dispatch() {
   esac
 }
 
-print_interactive_menu() {
-  cat <<'MENU'
-
--------- Airflow 本地菜单（输入序号或命令名）--------
-  1 install       2 start         3 stop          4 restart
-  5 status        6 dag-scaffold  7 dags-list     8 trigger
-  9 task-test     10 users-create  11 users-list
-  12 users-reset-password           13 http-trigger
-  0 完整帮助      q 退出
-  同序带参: 8 <dag_id> …   9 …   13 <dag_id> [payload.json] 需 export AIRFLOW_API_USERNAME/PASSWORD
-------------------------------------------------------
-MENU
-}
-
 interactive_main() {
-  echo "--- Airflow 本地交互模式 ---"
-  echo "AIRFLOW_HOME=${AIRFLOW_HOME}"
-  echo ""
-  local line
+  gum style --bold --foreground 212 "Airflow 本地助手"
+  gum style "AIRFLOW_HOME=${AIRFLOW_HOME}"
   set +e
   while true; do
-    print_interactive_menu
-    if ! IFS= read -r -e -p "airflow-local> " line; then
-      printf '\n'
-      break
-    fi
-    [[ -z "${line//[$' \t']/}" ]] && continue
-    local args
-    read -ra args <<<"$line"
-    local icmd="${args[0]}"
-
-    # 数字序号（菜单）
-    if [[ "$icmd" =~ ^[0-9]+$ ]]; then
-      case "$icmd" in
-        0) usage; continue ;;
-        10) ( dispatch users-create ); continue ;;
-        11) ( dispatch users-list "${args[@]:1}" ); continue ;;
-        12) ( dispatch users-reset-password "${args[@]:1}" ); continue ;;
-        13)
-          if [[ -z "${AIRFLOW_API_USERNAME:-}" || -z "${AIRFLOW_API_PASSWORD:-}" ]]; then
-            echo "菜单 13 需先: export AIRFLOW_API_USERNAME=… AIRFLOW_API_PASSWORD=…" >&2
-            continue
-          fi
-          if (( ${#args[@]} >= 2 )); then
-            ( dispatch http-trigger "${args[1]}" "${args[2]:-}" )
-          else
-            local hid=""
-            if ! IFS= read -r -e -p "  dag_id: " hid; then
-              printf '\n'
-              break
-            fi
-            [[ -n "${hid//[$' \t']/}" ]] && ( dispatch http-trigger "$hid" ) || echo "已跳过"
-          fi
-          continue ;;
-        1) ( dispatch install ); continue ;;
-        2) ( dispatch start ); continue ;;
-        3) ( dispatch stop ); continue ;;
-        4) ( dispatch restart ); continue ;;
-        5) ( dispatch status ); continue ;;
-        6) ( dispatch dag-scaffold ); continue ;;
-        7) ( dispatch dags-list ); continue ;;
-        8)
-          if (( ${#args[@]} >= 2 )); then
-            ( dispatch trigger "${args[1]}" "${args[@]:2}" )
-          else
-            local tid=""
-            if ! IFS= read -r -e -p "  dag_id: " tid; then
-              printf '\n'
-              break
-            fi
-            [[ -n "${tid//[$' \t']/}" ]] && ( dispatch trigger "$tid" ) || echo "已跳过（未输入 dag_id）"
-          fi
-          continue ;;
-        9)
-          if (( ${#args[@]} >= 2 )); then
-            local rest9=()
-            local j
-            for ((j = 1; j < ${#args[@]}; j++)); do
-              rest9+=("${args[j]}")
-            done
-            ( dispatch task-test "${rest9[@]}" )
-          else
-            local tline=""
-            if ! IFS= read -r -e -p "  task-test 参数（dag_id task_id logical_date …）: " tline; then
-              printf '\n'
-              break
-            fi
-            local ta=()
-            read -ra ta <<<"$tline"
-            ( dispatch task-test "${ta[@]}" )
-          fi
-          continue ;;
-        *)
-          echo "无效序号（1–9、10–13 或 0）。输入 0 查看帮助。" >&2
-          continue ;;
-      esac
-    fi
-
-    case "$icmd" in
-      quit|exit|q) break ;;
-      '?'|help|-h|--help) usage; continue ;;
+    local pick
+    pick="$(gum choose --header "Airflow 本地 — 选择操作（取消退出）" \
+      "install" "start" "stop" "restart" "status" \
+      "dag-scaffold" "dags-list" "trigger" "task-test" \
+      "users-create" "users-list" "users-reset-password" "http-trigger" \
+      "uninstall" "help" "quit")" || break
+    [[ -z "$pick" ]] && break
+    case "$pick" in
+      quit) break ;;
+      help) usage; continue ;;
+      trigger)
+        local tid
+        tid="$(gum input --placeholder "dag_id")" || continue
+        [[ -n "${tid//[$' \t']/}" ]] && ( dispatch trigger "$tid" ) || true
+        continue ;;
+      task-test)
+        local tline
+        tline="$(gum input --placeholder "dag_id task_id logical_date …（空格分隔）")" || continue
+        [[ -z "${tline//[$' \t']/}" ]] && continue
+        local ta_g=()
+        read -ra ta_g <<<"$tline"
+        ( dispatch task-test "${ta_g[@]}" )
+        continue ;;
+      http-trigger)
+        if [[ -z "${AIRFLOW_API_USERNAME:-}" || -z "${AIRFLOW_API_PASSWORD:-}" ]]; then
+          say_warn "请先: export AIRFLOW_API_USERNAME=… 与 AIRFLOW_API_PASSWORD=…"
+          continue
+        fi
+        local hid_g pld_g
+        hid_g="$(gum input --placeholder "dag_id")" || continue
+        [[ -z "${hid_g//[$' \t']/}" ]] && continue
+        pld_g="$(gum input --placeholder "payload.json 路径（可选，留空=默认 {\"conf\":{}}）")" || continue
+        if [[ -n "${pld_g//[$' \t']/}" ]]; then
+          ( dispatch http-trigger "$hid_g" "$pld_g" )
+        else
+          ( dispatch http-trigger "$hid_g" )
+        fi
+        continue ;;
     esac
-    local rest=()
-    local i
-    for ((i = 1; i < ${#args[@]}; i++)); do
-      rest+=("${args[i]}")
-    done
-    # 子 shell：子命令里的 exit 不会结束交互会话
-    ( dispatch "$icmd" "${rest[@]}" )
+    ( dispatch "$pick" )
   done
   set -e
 }
 
 main() {
+  if [[ $# -gt 0 ]]; then
+    case "$1" in
+      help | -h | --help)
+        dispatch "$@"
+        return 0
+        ;;
+    esac
+  fi
+  _ensure_gum_self_contained || exit 1
   if [[ $# -eq 0 ]]; then
     interactive_main
     return 0
