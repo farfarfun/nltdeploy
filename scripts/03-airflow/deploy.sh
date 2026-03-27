@@ -297,6 +297,12 @@ cmd_start() {
     exit 1
   fi
   activate_venv
+  # 本机稳定性优先：默认关闭 example DAG 并降低并发；用户显式 export 时可覆盖。
+  export AIRFLOW__CORE__LOAD_EXAMPLES="${AIRFLOW__CORE__LOAD_EXAMPLES:-False}"
+  export AIRFLOW__CORE__PARALLELISM="${AIRFLOW__CORE__PARALLELISM:-4}"
+  export AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG="${AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG:-4}"
+  export AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG="${AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG:-2}"
+  export AIRFLOW__API__WORKERS="${AIRFLOW__API__WORKERS:-2}"
   local log_file="${LOG_DIR}/standalone.out.log"
   say_info "==> 启动 airflow standalone（日志: ${log_file}）..."
   # nohup 保留 $! 为 airflow 主进程；stop 时按进程组发送信号以清理子进程
