@@ -78,15 +78,20 @@ NONINTERACTIVE=1 ./deploy.sh
 ```bash
 # 正常执行（支持交互）
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash
+# 国内（Gitee，与 GitHub 同步）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash
 
 # 指定版本（跳过交互）
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
 
 # 指定版本并强制重新创建
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.11 -f
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.11 -f
 
 # 指定版本并安装额外的包
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
 ```
 
 ## 工作流程

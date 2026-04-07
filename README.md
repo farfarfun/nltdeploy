@@ -1,6 +1,6 @@
 # nltdeploy
 
-用于在本机快速准备开发环境的 Bash 脚本集合：pip 镜像、Python/uv 虚拟环境、Airflow 3、Celery、常用 CLI（如 gum）、以及 GitHub 克隆网络修复。各脚本尽量自包含，可单独 `curl … | bash` 使用。
+用于在本机快速准备开发环境的 Bash 脚本集合：pip 镜像、Python/uv 虚拟环境、Airflow 3、Celery、常用 CLI（如 gum）、以及 GitHub 克隆网络修复。各脚本尽量自包含，可单独 `curl … | bash` 使用；内容已同步到 [Gitee 同名仓库](https://gitee.com/farfarfun/nltdeploy)，国内网络可改用下方 Gitee 的 raw 地址。
 
 ## 项目概述
 
@@ -54,12 +54,16 @@ cd scripts/01-configure-pip-sources
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+# 国内（Gitee）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
 非交互：
 
 ```bash
 NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+# 国内（Gitee）
+NONINTERACTIVE=1 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
 ### 2. 创建 Python 环境（uv）
@@ -73,20 +77,26 @@ cd scripts/02-create-python-env
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash
+# 国内（Gitee）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash
 ```
 
 指定版本、额外包（跳过部分交互）：
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
+# 国内（Gitee）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
 ```
 
 ### 3. 常用 CLI（gum，Airflow/GitHub 脚本会用到）
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/05-utils/utils-setup.sh | bash -s -- gum
-# 或 gum + shell 别名
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/05-utils/utils-setup.sh | bash -s -- all
+# 国内（Gitee）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/05-utils/utils-setup.sh | bash -s -- gum
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/05-utils/utils-setup.sh | bash -s -- all
 ```
 
 ### 4. Apache Airflow 3.x（本机）
@@ -101,6 +111,8 @@ chmod +x deploy.sh
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/03-airflow/deploy.sh | bash
+# 国内（Gitee）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/03-airflow/deploy.sh | bash
 ```
 
 默认约定：`AIRFLOW_HOME=~/opt/airflow`，Web 端口等与脚本内 `DEFAULT_*` 一致；更多环境变量与 `http-trigger` 说明见 **`scripts/03-airflow/deploy.sh` 文件头注释**。
@@ -127,6 +139,8 @@ chmod +x deploy.sh
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/06-github/deploy.sh | bash
+# 国内（Gitee）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/deploy.sh | bash
 ```
 
 （建议本机已具备 `gum` 或先执行 `05-utils`。）
@@ -156,7 +170,7 @@ curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/
 ## 通过 curl 执行时的公共约定
 
 - **`NONINTERACTIVE=1`**：两个主 deploy 脚本均支持，用于无 TTY 时跳过确认（见各脚本说明）。
-- **Fork 或自建 raw 地址**：部分脚本（如 `03-airflow`）会读取环境变量 **`nltdeploy_RAW_BASE`**（默认 `https://raw.githubusercontent.com/farfarfun/nltdeploy/master`），用于拉取同仓库下的 `utils-setup.sh` 等。Fork 后可 `export nltdeploy_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>`。
+- **Fork 或自建 raw 地址**：部分脚本（如 `03-airflow`）会读取环境变量 **`nltdeploy_RAW_BASE`**（默认 `https://raw.githubusercontent.com/farfarfun/nltdeploy/master`），用于拉取同仓库下的 `utils-setup.sh` 等。国内可设为 Gitee：`export nltdeploy_RAW_BASE=https://gitee.com/farfarfun/nltdeploy/raw/master`。Fork 后可 `export nltdeploy_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>`。
 
 ## 环境变量（跨脚本常见）
 
