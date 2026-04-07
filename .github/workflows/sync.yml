@@ -1,9 +1,7 @@
 #https://github.com/marketplace/actions/hub-mirror-action
 name: syncToGitee
 on:
-  push:
-    tags:
-      - '*'
+  push: '*'
 jobs:
   repo-sync:
     runs-on: ubuntu-latest
