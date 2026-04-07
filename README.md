@@ -1,262 +1,223 @@
-# nltdeploy - Python 环境自动化部署工具
+# nltdeploy
 
-这是一个 Python 环境自动化部署工具集，提供完整的 Python 开发环境自动化配置方案。
+用于在本机快速准备开发环境的 Bash 脚本集合：pip 镜像、Python/uv 虚拟环境、Airflow 3、Celery、常用 CLI（如 gum）、以及 GitHub 克隆网络修复。各脚本尽量自包含，可单独 `curl … | bash` 使用。
 
 ## 项目概述
 
-本项目提供了一套完整的 Python 开发环境自动化配置方案，帮助开发者快速搭建和配置 Python 开发环境。
+- **01-configure-pip-sources**：测速并写入 pip 配置，保留已有认证源等。
+- **02-create-python-env**：用 [uv](https://github.com/astral-sh/uv) 建虚拟环境并安装常用基础包。
+- **03-airflow**：本机 **Apache Airflow 3.x**（安装、启停、DAG 脚手架、用户与 HTTP 触发等）；依赖 gum，脚本内会按 README 同款方式拉取安装。
+- **04-celery**：Celery 安装与 worker/beat/flower 启停、状态；默认 `~/opt/celery`。
+- **05-utils**：安装 **gum**（`~/opt/gum`）与可选 shell 别名（`ll` / `la` / `lla`）。
+- **06-github**：诊断并修复「网页能开但 `git clone` 失败」的常见 HTTPS/SSH 问题。
 
-### 主要功能
-
-- ✅ **自动创建 Python 虚拟环境**：支持 Python 3.8-3.14 多个版本
-- ✅ **自动安装基础包**：预装常用开发工具包
-- ✅ **智能 pip 源配置**：自动检测并配置最快的 pip 镜像源
-- ✅ **网络连通性检测**：自动测试各镜像源的可用性和下载速度
-- ✅ **交互式操作**：友好的交互界面，支持非交互模式
-- ✅ **自动备份配置**：配置前自动备份现有配置
-- ✅ **保留现有配置**：自动读取并保留本地已有的 pip 源配置（包括带认证的源）
+Python 包元数据见根目录 [`pyproject.toml`](pyproject.toml)（MIT）。命令行入口名在元数据中列为 `nltdeploy`，与 `src/` 下模块布局仍在演进；Shell 脚本是当前主力的使用方式。
 
 ## 目录结构
 
 ```
 nltdeploy/
-├── README.md                                    # 项目主说明文档
-├── test-curl-mode.sh                           # curl 模式测试脚本
+├── LICENSE
+├── README.md
+├── pyproject.toml
+├── examples/
+│   └── python_env_examples.md          # 与 uv/Python 环境相关的用法示例（偏命令行工具向）
 └── scripts/
-    ├── 01-configure-pip-sources/               # pip 源配置脚本
-    │   ├── deploy.sh                           # 主脚本
-    │   └── readme.md                           # 详细说明文档
-    └── 02-create-python-env/                   # Python 环境创建脚本
-        ├── deploy.sh                           # 主脚本
-        └── readme.md                           # 详细说明文档
+    ├── 01-configure-pip-sources/
+    │   ├── deploy.sh
+    │   └── README.md
+    ├── 02-create-python-env/
+    │   ├── deploy.sh
+    │   └── README.md
+    ├── 03-airflow/
+    │   └── deploy.sh                   # Airflow 3 本机 setup（见脚本头注释与用法）
+    ├── 04-celery/
+    │   └── celery-setup.sh
+    ├── 05-utils/
+    │   └── utils-setup.sh              # gum / 别名 / all
+    └── 06-github/
+        └── deploy.sh                   # Git 连通性诊断与修复
 ```
+
+带序号的前缀表示 **推荐的大致顺序**（先配 pip 与 Python，再按需装 Airflow/Celery 等）；`04`–`06` 可按需独立执行。
 
 ## 快速开始
 
-### 1. 配置 pip 源（推荐先执行）
+### 1. 配置 pip 源（建议最先执行）
 
-```bash
-# 进入脚本目录
-cd scripts/01-configure-pip-sources
-
-# 运行脚本
-./deploy.sh
-
-# 或通过 curl 执行
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
-```
-
-### 2. 创建 Python 环境
-
-```bash
-# 进入脚本目录
-cd scripts/02-create-python-env
-
-# 运行脚本
-./deploy.sh
-
-# 或通过 curl 执行
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash
-```
-
-## 脚本说明
-
-### 1. configure-pip-sources - pip 源自动配置
-
-**位置**：`scripts/01-configure-pip-sources/deploy.sh`
-
-**功能**：自动检测网络连通性并配置常用的 pip 镜像源。
-
-**主要特性**：
-- 自动检测所有预定义的 pip 镜像源
-- 测试每个源的响应延迟和实际下载速度
-- 按下载速度自动排序，最快的源作为主源
-- 自动读取并保留本地已有的 pip 源配置
-- 支持带认证信息的源
-
-**详细文档**：[查看完整说明](scripts/01-configure-pip-sources/readme.md)
-
-**快速使用**：
 ```bash
 cd scripts/01-configure-pip-sources
 ./deploy.sh
 ```
 
-### 2. create-python-env - Python 环境创建
+远程一行（交互）：
 
-**位置**：`scripts/02-create-python-env/deploy.sh`
-
-**功能**：使用 `uv` 创建 Python 虚拟环境并安装基础包。
-
-**主要特性**：
-- 支持 Python 3.8-3.14 多个版本
-- 自动安装 uv（如果未安装）
-- 交互式版本选择界面
-- 自动安装基础包：`pip`、`funutil`、`funbuild`、`funinstall`、`funsecret`
-- 支持安装额外的 Python 包
-
-**详细文档**：[查看完整说明](scripts/02-create-python-env/readme.md)
-
-**快速使用**：
 ```bash
-cd scripts/02-create-python-env
-./deploy.sh
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
-## 使用建议
-
-### 推荐的使用流程
-
-1. **首次使用**：
-   ```bash
-   # 1. 先配置 pip 源（提高后续安装速度）
-   cd scripts/01-configure-pip-sources
-   ./deploy.sh
-   
-   # 2. 创建 Python 环境
-   cd ../02-create-python-env
-   ./deploy.sh
-   ```
-
-2. **后续使用**：
-   - 如果网络环境变化，可以重新运行 `01-configure-pip-sources/deploy.sh` 更新 pip 源配置
-   - 如果需要创建新的 Python 版本环境，直接运行 `02-create-python-env/deploy.sh`
-
-### 两个脚本的关系
-
-- **`01-configure-pip-sources`** 用于配置 pip 镜像源，提高包下载速度
-- **`02-create-python-env`** 用于创建 Python 虚拟环境并安装包
-- **建议先运行 `01-configure-pip-sources`**，这样在创建环境时安装包会更快
-
-## 通过 curl 执行
-
-### 配置 pip 源
+非交互：
 
 ```bash
-# 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
-
-# 非交互模式
 NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 
-### 创建 Python 环境
+### 2. 创建 Python 环境（uv）
 
 ```bash
-# 正常执行（支持交互）
+cd scripts/02-create-python-env
+./deploy.sh
+```
+
+远程一行：
+
+```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash
+```
 
-# 指定版本（跳过交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
+指定版本、额外包（跳过部分交互）：
 
-# 指定版本并安装额外的包
+```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
 ```
 
-## 环境变量
+### 3. 常用 CLI（gum，Airflow/GitHub 脚本会用到）
 
-两个脚本都支持以下环境变量：
+```bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/05-utils/utils-setup.sh | bash -s -- gum
+# 或 gum + shell 别名
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/05-utils/utils-setup.sh | bash -s -- all
+```
 
-- `NONINTERACTIVE=1`：强制非交互模式，自动使用默认值，不进行交互
+### 4. Apache Airflow 3.x（本机）
+
+```bash
+cd scripts/03-airflow
+chmod +x deploy.sh
+./deploy.sh              # 无参数时进入 gum 菜单；子命令见脚本头部注释
+```
+
+远程一行（仅示例，按需加子命令）：
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/03-airflow/deploy.sh | bash
+```
+
+默认约定：`AIRFLOW_HOME=~/opt/airflow`，Web 端口等与脚本内 `DEFAULT_*` 一致；更多环境变量与 `http-trigger` 说明见 **`scripts/03-airflow/deploy.sh` 文件头注释**。
+
+### 5. Celery（本机）
+
+```bash
+cd scripts/04-celery
+chmod +x celery-setup.sh
+./celery-setup.sh
+```
+
+默认 `CELERY_HOME=~/opt/celery`，Broker 等可通过环境变量覆盖，详见脚本头部。
+
+### 6. 修复 GitHub 克隆网络
+
+```bash
+cd scripts/06-github
+chmod +x deploy.sh
+./deploy.sh
+```
+
+或：
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/06-github/deploy.sh | bash
+```
+
+（建议本机已具备 `gum` 或先执行 `05-utils`。）
+
+## 脚本说明摘要
+
+| 目录 | 入口文件 | 作用 |
+|------|-----------|------|
+| `01-configure-pip-sources` | `deploy.sh` | 镜像测速、写入 pip 配置、备份 |
+| `02-create-python-env` | `deploy.sh` | uv、多版本 Python venv、基础包 |
+| `03-airflow` | `deploy.sh` | Airflow 3 安装与日常运维封装 |
+| `04-celery` | `celery-setup.sh` | Celery 安装与进程管理 |
+| `05-utils` | `utils-setup.sh` | gum 与 shell 便利项 |
+| `06-github` | `deploy.sh` | GitHub 克隆通道诊断与修复 |
+
+子目录中的详细说明：
+
+- [pip 源配置](scripts/01-configure-pip-sources/README.md)
+- [Python 环境创建](scripts/02-create-python-env/README.md)
+
+## 使用建议
+
+1. 首次：**01** → **02**；若要用 Airflow/ GitHub 诊断交互界面，可先 **05**（装 gum）。
+2. 网络或镜像变化时可重跑 **01**。
+3. **03** 仅面向 Airflow **3.x**，与 2.x 不混用。
+
+## 通过 curl 执行时的公共约定
+
+- **`NONINTERACTIVE=1`**：两个主 deploy 脚本均支持，用于无 TTY 时跳过确认（见各脚本说明）。
+- **Fork 或自建 raw 地址**：部分脚本（如 `03-airflow`）会读取环境变量 **`nltdeploy_RAW_BASE`**（默认 `https://raw.githubusercontent.com/farfarfun/nltdeploy/master`），用于拉取同仓库下的 `utils-setup.sh` 等。Fork 后可 `export nltdeploy_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>`。
+
+## 环境变量（跨脚本常见）
+
+- **`NONINTERACTIVE=1`**：非交互。
+- **`05-utils`** 另有 `GUM_HOME`、`GUM_TAG`、`GUM_USE_BREW`、`SKIP_GUM_SHELL_PROFILE`、`SKIP_UTILS_SHELL_ALIASES` 等，见 `utils-setup.sh` 头部。
+
+各专项脚本（Airflow、Celery、GitHub）的专有变量以各自文件头注释为准。
 
 ## 前置要求
 
-### 网络连接
-
-所有脚本都需要网络连接：
-- `01-configure-pip-sources`：需要访问各个 pip 镜像源进行测试
-- `02-create-python-env`：需要从 PyPI 下载和安装包，以及可能需要下载 uv 安装程序
-
-### 系统要求
-
-- **操作系统**：macOS、Linux（Windows 需要 WSL 或 Git Bash）
-- **Shell**：Bash 3.2+（macOS 默认 bash 3.x 也支持）
-- **工具**：`curl`（通常系统自带）
-
-**注意**：`uv` 会在 `02-create-python-env` 脚本运行时自动检测并安装，无需手动安装。
+- **网络**：测速、装包、拉取安装脚本均需联网。
+- **系统**：macOS、Linux（Windows 建议 WSL）。
+- **Shell**：Bash 3.2+；**`curl`** 通常必需。
+- **`02-create-python-env`** 会在需要时安装 **uv**，无需事先安装。
 
 ## 故障排除
 
-### 通用问题
+### 脚本没有执行权限
 
-#### 问题：脚本执行权限不足
-
-**解决方案**：
 ```bash
 chmod +x scripts/01-configure-pip-sources/deploy.sh
 chmod +x scripts/02-create-python-env/deploy.sh
+chmod +x scripts/03-airflow/deploy.sh
+chmod +x scripts/04-celery/celery-setup.sh
+chmod +x scripts/05-utils/utils-setup.sh
+chmod +x scripts/06-github/deploy.sh
 ```
 
-#### 问题：网络连接问题
+### 网络与代理
 
-**解决方案**：
-1. 检查网络连接
-2. 检查防火墙设置
-3. 如果使用代理，确保代理配置正确
+检查防火墙与代理；企业网络可优先跑 **06-github** 或 **01** 选对镜像。
 
-### pip 源配置问题
+### 分脚本详细排错
 
-详细故障排除请参考：[pip 源配置脚本说明](scripts/01-configure-pip-sources/readme.md#故障排除)
+- [pip 源脚本说明 / 故障排除](scripts/01-configure-pip-sources/README.md)
+- [Python 环境脚本说明 / 故障排除](scripts/02-create-python-env/README.md)
 
-### Python 环境创建问题
+### 本地检验「管道执行」
 
-详细故障排除请参考：[Python 环境创建脚本说明](scripts/02-create-python-env/readme.md#故障排除)
-
-## 项目结构说明
-
-### 脚本组织
-
-脚本按照功能模块组织在不同的目录中：
-
-- **`01-configure-pip-sources`**：pip 源配置相关脚本
-- **`02-create-python-env`**：Python 环境创建相关脚本
-
-每个目录包含：
-- `deploy.sh`：主执行脚本
-- `readme.md`：详细的说明文档
-
-### 命名规范
-
-- 目录使用数字前缀（`01-`、`02-`）表示执行顺序
-- 主脚本统一命名为 `deploy.sh`
-- 说明文档统一命名为 `readme.md`
-
-## 开发说明
-
-### 本地测试
-
-在本地开发时，可以使用以下方法测试脚本：
+不经过 GitHub 时可把脚本通过 stdin 交给 bash，便于本地改完再测：
 
 ```bash
-# 测试 pip 源配置脚本
-cd scripts/01-configure-pip-sources
-./deploy.sh
-
-# 测试 Python 环境创建脚本
-cd ../02-create-python-env
-./deploy.sh
+bash < scripts/01-configure-pip-sources/deploy.sh
+bash < scripts/02-create-python-env/deploy.sh
 ```
 
-### 测试 curl 执行方式
+## 命名规范
 
-可以使用项目根目录的 `test-curl-mode.sh` 脚本测试 curl 执行方式：
-
-```bash
-# 测试 pip 源配置脚本
-cat scripts/01-configure-pip-sources/deploy.sh | bash
-
-# 测试 Python 环境创建脚本
-cat scripts/02-create-python-env/deploy.sh | bash
-```
+- 目录使用 **`01-`…`06-`** 表示推荐顺序或模块划分。
+- 多数模块主入口为 **`deploy.sh`**；Celery 使用 **`celery-setup.sh`** 以区别于服务名。
 
 ## 相关链接
 
-- [pip 源配置脚本详细说明](scripts/01-configure-pip-sources/readme.md)
-- [Python 环境创建脚本详细说明](scripts/02-create-python-env/readme.md)
-- [uv 官方文档](https://github.com/astral-sh/uv)
-- [Python 虚拟环境文档](https://docs.python.org/3/tutorial/venv.html)
-- [pip 配置文档](https://pip.pypa.io/en/stable/topics/configuration/)
+- [uv](https://github.com/astral-sh/uv)
+- [Python venv](https://docs.python.org/3/tutorial/venv.html)
+- [pip 配置](https://pip.pypa.io/en/stable/topics/configuration/)
+- [Apache Airflow 文档](https://airflow.apache.org/docs/apache-airflow/stable/)
+- [Celery 文档](https://docs.celeryq.dev/)
 
 ## 许可证
 
-本脚本遵循项目许可证。
+[MIT License](LICENSE)
+
+Copyright (c) 2026 farfarfun

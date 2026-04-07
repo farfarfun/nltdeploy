@@ -3,7 +3,7 @@
 # 与脚本所在仓库/业务无关，可置于任意目录单独使用。
 # 约定与 .cursor/agents/software-ops.md 对齐：默认 AIRFLOW_HOME=~/opt/airflow，并创建 {bin,etc,data,log}；
 # 依赖 gum：缺省时按 README 同款「curl -LsSf <utils-setup.sh> | bash」安装（不经本地路径调用其它脚本）。
-# 默认将 AIRFLOW_HOME 设为 ~/opt/airflow/（见 resolve_airflow_home）；也可用 AIRFLOW_LOCAL_USE_REPO_HOME 使用脚本旁 .airflow-local。
+# 默认将 AIRFLOW_HOME 固定为 ~/opt/airflow（不再支持改到其它目录）。
 # install 会安装核心 + apache-airflow-providers-fab（FAB），并执行 airflow fab-db migrate。
 #
 # 用法：
@@ -30,21 +30,19 @@
 #              响应: {"access_token":"..."}
 #   2) 触发运行: POST {BASE}/api/v2/dags/{dag_id}/dagRuns  Authorization: Bearer <token>
 #              body 示例: {"conf":{"argv":["--date","2025-01-01"],"script":"/path/to/job.py"}}
-#   本脚本封装: 设置 AIRFLOW_API_USERNAME / AIRFLOW_API_PASSWORD，可选 AIRFLOW_API_BASE（默认 http://127.0.0.1:8080）
+#   本脚本封装: 设置 AIRFLOW_API_USERNAME / AIRFLOW_API_PASSWORD，可选 AIRFLOW_API_BASE（默认 http://127.0.0.1:8806）
 #              执行 http-trigger；payload.json 缺省则用 {"conf":{}}。
 #
 # 环境变量：
-#   AIRFLOW_HOME              覆盖 Airflow 家目录（未设置且未启用「同目录 home」时默认 ~/opt/airflow）
-#   AIRFLOW_VENV              虚拟环境路径（默认 ${AIRFLOW_HOME}/venv）
 #   AIRFLOW_VERSION           Airflow 版本（默认与下方 DEFAULT_AIRFLOW_VERSION 一致）
-#   AIRFLOW_LOCAL_USE_REPO_HOME=1  使用脚本所在目录下的 .airflow-local 作为默认 AIRFLOW_HOME
+#   AIRFLOW_PYTHON_BIN        指定 uv venv 使用的 Python 解释器（例如 python3.11）
 #
 # Airflow 3 默认 SimpleAuthManager，不会注册 airflow users。本脚本在 venv 内已安装 FAB 提供方时，
 # 会自动 export AIRFLOW__CORE__AUTH_MANAGER=FabAuthManager（可被你在环境中显式覆盖）。
 #   AIRFLOW_ADMIN_USER        与下面两项同时设置时，install 会尝试 airflow users create（需 FAB 包与配置）
 #   AIRFLOW_ADMIN_PASSWORD
 #   AIRFLOW_ADMIN_EMAIL
-#   AIRFLOW_API_BASE          http-trigger 用，API 根 URL（默认 http://127.0.0.1:8080）
+#   AIRFLOW_API_BASE          http-trigger 用，API 根 URL（默认 http://127.0.0.1:8806）
 #   AIRFLOW_API_USERNAME      http-trigger 用，与 AIRFLOW_API_PASSWORD 一起换 JWT
 #   AIRFLOW_API_PASSWORD
 #   AIRFLOW_UNINSTALL_YES=1   仅在非交互（无 TTY）时配合 uninstall 使用，表示确认删除
@@ -55,6 +53,7 @@ set -euo pipefail
 
 DEFAULT_AIRFLOW_VERSION="3.1.8"
 AIRFLOW_VERSION="${AIRFLOW_VERSION:-$DEFAULT_AIRFLOW_VERSION}"
+DEFAULT_AIRFLOW_PORT="8806"
 
 # Airflow 3：users / roles 等 CLI 仅在 FabAuthManager 下注册（需已安装 apache-airflow-providers-fab）
 FAB_AUTH_MANAGER_CLASS="airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager"
@@ -118,7 +117,7 @@ usage() {
   不传参数时进入 gum 列表菜单。若无 gum，将按 README 用 curl 拉取 utils-setup.sh 安装。
 
 命令:
-  install          创建 venv；用官方 constraints 安装 Airflow 核心 + FAB 提供方；db migrate + fab-db migrate
+  install          在 ~/opt/airflow/venv 用 uv 创建/复用环境；按官方 constraints 安装 Airflow 核心 + FAB；db migrate + fab-db migrate
   start            后台启动 airflow standalone（写入 run/standalone.pid）
   stop             停止 standalone 进程组
   restart          stop 后 start
@@ -131,7 +130,7 @@ usage() {
   users-create     创建登录用户：无参数=交互问答；有参数=透传 airflow users create（需 FAB）
   users-list       列举用户（airflow users list；需 FAB + FabAuthManager，脚本在已装 fab 的 venv 内会自动设置）
   users-reset-password  重置用户密码：无参数=交互；有参数=透传 airflow users reset-password
-  uninstall        停止 standalone 并删除 AIRFLOW_VENV 与 AIRFLOW_HOME（不可逆；非 TTY 须设 AIRFLOW_UNINSTALL_YES=1）
+  uninstall        停止 standalone 并删除固定目录 ~/opt/airflow（包含 venv，不可逆；非 TTY 须设 AIRFLOW_UNINSTALL_YES=1）
   help             显示本说明
 
 交互模式: gum choose；http-trigger 需先 export AIRFLOW_API_USERNAME 与 PASSWORD。
@@ -141,23 +140,23 @@ EOF
 }
 
 resolve_airflow_home() {
-  if [[ -n "${AIRFLOW_HOME:-}" ]]; then
-    printf '%s' "$AIRFLOW_HOME"
-    return
-  fi
-  if [[ "${AIRFLOW_LOCAL_USE_REPO_HOME:-0}" == "1" ]]; then
-    printf '%s' "${SCRIPT_DIR}/.airflow-local"
-    return
-  fi
   printf '%s' "${HOME}/opt/airflow"
 }
 
 export AIRFLOW_HOME="$(resolve_airflow_home)"
-AIRFLOW_VENV="${AIRFLOW_VENV:-${AIRFLOW_HOME}/venv}"
+AIRFLOW_VENV="${AIRFLOW_HOME}/venv"
 RUN_DIR="${AIRFLOW_HOME}/run"
 LOG_DIR="${AIRFLOW_HOME}/logs"
 DAG_DIR="${AIRFLOW_HOME}/dags"
 PID_FILE="${RUN_DIR}/standalone.pid"
+AIRFLOW_PYTHON=""
+
+require_uv() {
+  if ! command -v uv &>/dev/null; then
+    echo "未找到 uv，请先安装 uv（https://docs.astral.sh/uv/）。" >&2
+    exit 1
+  fi
+}
 
 ensure_dirs() {
   # software-ops：在 AIRFLOW_HOME 下保留标准 opt 子目录（与 Airflow 自带 dags/logs/run 并存）
@@ -166,23 +165,59 @@ ensure_dirs() {
 }
 
 require_python() {
-  if ! command -v python3 &>/dev/null; then
-    echo "未找到 python3，请先安装 Python 3.10+（Airflow 3.1+ 要求 3.10–3.13）。" >&2
-    exit 1
-  fi
+  local requested="${AIRFLOW_PYTHON_BIN:-}"
+  local found=""
   local major minor
-  major="$(python3 -c 'import sys; print(sys.version_info[0])')"
-  minor="$(python3 -c 'import sys; print(sys.version_info[1])')"
-  if (( major < 3 || (major == 3 && minor < 10) )); then
-    echo "当前 Python 版本为 ${major}.${minor}，需要 >= 3.10（参见官方 Prerequisites）。" >&2
+  local candidates=()
+
+  if [[ -n "$requested" ]]; then
+    candidates+=("$requested")
+  else
+    candidates+=(
+      "python3"
+      "python3.13"
+      "python3.12"
+      "python3.11"
+      "python3.10"
+      "${HOME}/opt/py313/bin/python3"
+      "${HOME}/opt/py312/bin/python3"
+      "${HOME}/opt/py311/bin/python3"
+      "${HOME}/opt/py310/bin/python3"
+    )
+  fi
+
+  local py
+  for py in "${candidates[@]}"; do
+    if ! command -v "$py" &>/dev/null; then
+      continue
+    fi
+    major="$("$py" -c 'import sys; print(sys.version_info[0])')"
+    minor="$("$py" -c 'import sys; print(sys.version_info[1])')"
+    if (( major > 3 || (major == 3 && minor >= 10) )); then
+      found="$(command -v "$py")"
+      break
+    fi
+  done
+
+  if [[ -z "$found" ]]; then
+    if command -v python3 &>/dev/null; then
+      major="$(python3 -c 'import sys; print(sys.version_info[0])')"
+      minor="$(python3 -c 'import sys; print(sys.version_info[1])')"
+      echo "当前 Python 版本为 ${major}.${minor}，需要 >= 3.10（Airflow 3.1+ 要求 3.10–3.13）。" >&2
+    else
+      echo "未找到可用 Python，请先安装 Python 3.10+（Airflow 3.1+ 要求 3.10–3.13）。" >&2
+    fi
+    echo "可通过 AIRFLOW_PYTHON_BIN 指定解释器，例如: AIRFLOW_PYTHON_BIN=python3.11 $0 install" >&2
     exit 1
   fi
-  say_info "使用 Python: $(python3 --version)"
+
+  AIRFLOW_PYTHON="$found"
+  say_info "使用 Python: $("$AIRFLOW_PYTHON" --version) (${AIRFLOW_PYTHON})"
 }
 
 constraint_url() {
   local py_minor
-  py_minor="$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+  py_minor="$("${AIRFLOW_PYTHON}" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
   printf 'https://raw.githubusercontent.com/apache/airflow/constraints-%s/constraints-%s.txt' \
     "$AIRFLOW_VERSION" "$py_minor"
 }
@@ -224,6 +259,7 @@ require_airflow_users_cli() {
 }
 
 cmd_install() {
+  require_uv
   require_python
   ensure_dirs
   say_info "AIRFLOW_HOME=${AIRFLOW_HOME}"
@@ -235,17 +271,17 @@ cmd_install() {
     fi
   fi
   if [[ ! -d "$AIRFLOW_VENV" ]]; then
-    say_info "==> 创建虚拟环境..."
-    python3 -m venv "$AIRFLOW_VENV"
+    say_info "==> 使用 uv 创建虚拟环境..."
+    uv venv --python "${AIRFLOW_PYTHON}" "${AIRFLOW_VENV}"
   fi
   activate_venv
   local curl_url
   curl_url="$(constraint_url)"
-  say_info "==> 升级 pip..."
-  pip install --upgrade pip
+  say_info "==> 升级 pip（uv pip）..."
+  uv pip install --python "${AIRFLOW_VENV}/bin/python" --upgrade pip
   say_info "==> 安装 Airflow 核心 + FAB（apache-airflow + apache-airflow-providers-fab，同一 constraints）..."
-  # 不用 gum spin 包裹 pip：需完整日志便于排错（software-ops：可观测性优先）
-  pip install \
+  # 不用 gum spin 包裹安装：需完整日志便于排错（software-ops：可观测性优先）
+  uv pip install --python "${AIRFLOW_VENV}/bin/python" \
     "apache-airflow==${AIRFLOW_VERSION}" \
     "apache-airflow-providers-fab" \
     --constraint "${curl_url}"
@@ -297,20 +333,26 @@ cmd_start() {
     exit 1
   fi
   activate_venv
+  local airflow_cmd="${AIRFLOW_VENV}/bin/airflow"
+  if [[ ! -x "$airflow_cmd" ]]; then
+    echo "未找到可执行文件: ${airflow_cmd}" >&2
+    exit 1
+  fi
   # 本机稳定性优先：默认关闭 example DAG 并降低并发；用户显式 export 时可覆盖。
   export AIRFLOW__CORE__LOAD_EXAMPLES="${AIRFLOW__CORE__LOAD_EXAMPLES:-False}"
   export AIRFLOW__CORE__PARALLELISM="${AIRFLOW__CORE__PARALLELISM:-4}"
   export AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG="${AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG:-4}"
   export AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG="${AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG:-2}"
   export AIRFLOW__API__WORKERS="${AIRFLOW__API__WORKERS:-2}"
+  export AIRFLOW__WEBSERVER__WEB_SERVER_PORT="${AIRFLOW__WEBSERVER__WEB_SERVER_PORT:-$DEFAULT_AIRFLOW_PORT}"
   local log_file="${LOG_DIR}/standalone.out.log"
   say_info "==> 启动 airflow standalone（日志: ${log_file}）..."
-  # nohup 保留 $! 为 airflow 主进程；stop 时按进程组发送信号以清理子进程
-  nohup airflow standalone >>"$log_file" 2>&1 &
+  # 先激活 venv，再显式调用 venv 内 airflow；nohup 保留 $! 为主进程
+  nohup "${airflow_cmd}" standalone >>"$log_file" 2>&1 &
   local pid=$!
   echo "$pid" >"$PID_FILE"
   echo "已写入 PID ${pid} -> ${PID_FILE}"
-  echo "UI 默认 http://localhost:8080 （见 airflow.cfg）；standalone 首次运行可能在日志中打印管理员账号。"
+  echo "UI 默认 http://localhost:${AIRFLOW__WEBSERVER__WEB_SERVER_PORT} （见 airflow.cfg）；standalone 首次运行可能在日志中打印管理员账号。"
 }
 
 # 第二个参数为 1 时跳过确认（供 uninstall 在已二次确认后调用）
@@ -364,15 +406,28 @@ cmd_stop() {
 }
 
 _uninstall_safety_check() {
-  local ap hp
-  if [[ ! -d "$AIRFLOW_HOME" ]] && [[ ! -d "$AIRFLOW_VENV" ]]; then
-    say_warn "AIRFLOW_HOME 与 AIRFLOW_VENV 均不存在，无需卸载。"
+  local ap vp hp
+  if [[ ! -d "$AIRFLOW_HOME" ]]; then
+    say_warn "AIRFLOW_HOME 不存在，无需卸载。"
     exit 0
   fi
   ap="$(cd "$AIRFLOW_HOME" 2>/dev/null && pwd -P)" || ap="$AIRFLOW_HOME"
+  vp="$(cd "$AIRFLOW_VENV" 2>/dev/null && pwd -P)" || vp="$AIRFLOW_VENV"
   hp="$(cd "$HOME" && pwd -P)"
   if [[ "$ap" == "/" || "$ap" == "$hp" ]]; then
     echo "错误: AIRFLOW_HOME 解析为 / 或 \$HOME，禁止卸载。" >&2
+    exit 1
+  fi
+  if [[ "$vp" == "/" || "$vp" == "$hp" ]]; then
+    echo "错误: AIRFLOW_VENV 解析为 / 或 \$HOME，禁止卸载。" >&2
+    exit 1
+  fi
+  if [[ "$ap" != "${HOME}/opt/airflow" ]]; then
+    echo "错误: AIRFLOW_HOME 不是固定目录 ${HOME}/opt/airflow，禁止卸载。" >&2
+    exit 1
+  fi
+  if [[ "$vp" != "${HOME}/opt/airflow/venv" ]]; then
+    echo "错误: AIRFLOW_VENV 不是固定目录 ${HOME}/opt/airflow/venv，禁止卸载。" >&2
     exit 1
   fi
 }
@@ -574,7 +629,7 @@ cmd_http_trigger() {
     echo "http-trigger 需要 python3（解析 JSON / 编码 URL）。" >&2
     exit 1
   }
-  local base="${AIRFLOW_API_BASE:-http://127.0.0.1:8080}"
+  local base="${AIRFLOW_API_BASE:-http://127.0.0.1:${DEFAULT_AIRFLOW_PORT}}"
   base="${base%/}"
   local dag_id="${1:-}"
   local payload_path="${2:-}"
