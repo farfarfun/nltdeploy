@@ -6,7 +6,7 @@
 set -e  # 遇到错误立即退出
 
 # gum：与 README 一致「curl -LsSf … | bash」。nltdeploy_RAW_BASE 可覆盖 raw 根路径。
-_nltdeploy_RAW_BASE="${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}"
+_nltdeploy_RAW_BASE="${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}}"
 _GUM_UTILS_SETUP_URL="${_nltdeploy_RAW_BASE}/scripts/05-utils/utils-setup.sh"
 
 _ensure_gum_self_contained() {
