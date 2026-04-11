@@ -17,7 +17,11 @@ for f in \
   nlt-celery-install nlt-celery-update \
   nlt-service-celery-worker-start nlt-service-celery-beat-start \
   nlt-service-celery-flower-start nlt-service-celery-stop \
-  nlt-service-celery-restart nlt-service-celery-status
+  nlt-service-celery-restart nlt-service-celery-status \
+  nlt-paperclip-install nlt-paperclip \
+  nlt-service-paperclip-start nlt-service-paperclip-stop \
+  nlt-service-paperclip-restart nlt-service-paperclip-status \
+  nlt-service-paperclip-update
 do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1
