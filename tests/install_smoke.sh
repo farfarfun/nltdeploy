@@ -21,10 +21,15 @@ for f in \
   nlt-paperclip-install nlt-paperclip \
   nlt-service-paperclip-start nlt-service-paperclip-stop \
   nlt-service-paperclip-restart nlt-service-paperclip-status \
-  nlt-service-paperclip-update
+  nlt-service-paperclip-update \
+  nlt-code-server-install nlt-code-server \
+  nlt-service-code-server-start nlt-service-code-server-stop \
+  nlt-service-code-server-restart nlt-service-code-server-status \
+  nlt-service-code-server-update
 do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1
 done
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/airflow/deploy.sh" || exit 1
+bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/code-server/code-server-setup.sh" || exit 1
 echo "install_smoke OK"

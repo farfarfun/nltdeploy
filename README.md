@@ -1,6 +1,6 @@
 # nltdeploy
 
-用于在本机快速准备开发环境的 Bash 脚本集合：pip 镜像、Python/uv 虚拟环境、Airflow 3、Celery、[Paperclip](https://github.com/paperclipai/paperclip)（AI 编排，源码安装）、常用 CLI（如 gum）、以及 GitHub 克隆网络修复。各脚本尽量自包含，可单独 `curl … | bash` 使用；内容已同步到 [Gitee 同名仓库](https://gitee.com/farfarfun/nltdeploy)，国内网络可改用下方 Gitee 的 raw 地址。
+用于在本机快速准备开发环境的 Bash 脚本集合：pip 镜像、Python/uv 虚拟环境、Airflow 3、Celery、[Paperclip](https://github.com/paperclipai/paperclip)（AI 编排，源码安装）、[code-server](https://github.com/coder/code-server)（浏览器内 VS Code，官方 standalone 包）、常用 CLI（如 gum）、以及 GitHub 克隆网络修复。各脚本尽量自包含，可单独 `curl … | bash` 使用；内容已同步到 [Gitee 同名仓库](https://gitee.com/farfarfun/nltdeploy)，国内网络可改用下方 Gitee 的 raw 地址。
 
 ## 项目概述
 
@@ -11,6 +11,7 @@
 - **05-utils**：安装 **gum**（`~/opt/gum`）与可选 shell 别名（`ll` / `la` / `lla`）。
 - **06-github**：诊断并修复「网页能开但 `git clone` 失败」的常见 HTTPS/SSH 问题。
 - **07-paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，数据目录见上游 `~/.paperclip/…`。
+- **08-code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。
 
 Python 包元数据见根目录 [`pyproject.toml`](pyproject.toml)（MIT）。命令行入口名在元数据中列为 `nltdeploy`，与 `src/` 下模块布局仍在演进；Shell 脚本是当前主力的使用方式。
 
@@ -87,6 +88,9 @@ bash tests/install_smoke.sh
 | `nlt-paperclip-install` | `scripts/07-paperclip/paperclip-setup.sh` install（git clone + pnpm install） |
 | `nlt-paperclip` | 同上，透传子命令；无参为 gum 菜单 |
 | `nlt-service-paperclip-start` / `stop` / `restart` / `status` / `update` | 同上 `paperclip-setup.sh` 对应子命令 |
+| `nlt-code-server-install` | `scripts/08-code-server/code-server-setup.sh` install（下载解压官方包） |
+| `nlt-code-server` | 同上，透传子命令；无参为 gum 菜单 |
+| `nlt-service-code-server-start` / `stop` / `restart` / `status` / `update` | 同上 `code-server-setup.sh` 对应子命令 |
 
 ## 目录结构
 
@@ -117,11 +121,13 @@ nltdeploy/
 │   │   └── utils-setup.sh              # gum / 别名 / all
 │   ├── 06-github/
 │   │   └── deploy.sh                   # Git 连通性诊断与修复
-│   └── 07-paperclip/
-│       └── paperclip-setup.sh          # Paperclip 源码克隆与 pnpm 服务启停
+│   ├── 07-paperclip/
+│   │   └── paperclip-setup.sh          # Paperclip 源码克隆与 pnpm 服务启停
+│   └── 08-code-server/
+│       └── code-server-setup.sh        # code-server 官方包下载与启停
 ```
 
-带序号的前缀表示 **推荐的大致顺序**（先配 pip 与 Python，再按需装 Airflow/Celery 等）；`04`–`07` 可按需独立执行。
+带序号的前缀表示 **推荐的大致顺序**（先配 pip 与 Python，再按需装 Airflow/Celery 等）；`04`–`08` 可按需独立执行。
 
 ## 快速开始
 
@@ -238,6 +244,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/de
 | `05-utils` | `utils-setup.sh` | gum 与 shell 便利项 |
 | `06-github` | `deploy.sh` | GitHub 克隆通道诊断与修复 |
 | `07-paperclip` | `paperclip-setup.sh` | 克隆 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)、pnpm 安装与启停 |
+| `08-code-server` | `code-server-setup.sh` | 下载 [coder/code-server](https://github.com/coder/code-server) standalone 包并启停 |
 
 子目录中的详细说明：
 
@@ -261,7 +268,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/de
 - **`NLTDEPLOY_RAW_BASE`**：覆盖拉取本仓库 raw 脚本的根 URL（优先于 `nltdeploy_RAW_BASE`）。见上一节「通过 curl 执行时的公共约定」。
 - **`05-utils`** 另有 `GUM_HOME`、`GUM_TAG`、`GUM_USE_BREW`、`SKIP_GUM_SHELL_PROFILE`、`SKIP_UTILS_SHELL_ALIASES` 等，见 `utils-setup.sh` 头部。
 
-各专项脚本（Airflow、Celery、GitHub、Paperclip）的专有变量以各自文件头注释为准。
+各专项脚本（Airflow、Celery、GitHub、Paperclip、code-server）的专有变量以各自文件头注释为准。
 
 ## 前置要求
 
@@ -270,6 +277,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/de
 - **Shell**：Bash 3.2+；**`curl`** 通常必需。
 - **`02-create-python-env`** 会在需要时安装 **uv**，无需事先安装。
 - **Paperclip**：需要 **Node.js 20+**；脚本会尝试用 **corepack** 准备 **pnpm 9+**（见 `07-paperclip/paperclip-setup.sh`）。
+- **code-server**：需要 **`curl`** 与 **`tar`**；安装与运行 **不依赖** 本机 Node（见 `08-code-server/code-server-setup.sh`）。
 
 ## 故障排除
 
@@ -284,6 +292,7 @@ chmod +x scripts/04-celery/celery-setup.sh
 chmod +x scripts/05-utils/utils-setup.sh
 chmod +x scripts/06-github/deploy.sh
 chmod +x scripts/07-paperclip/paperclip-setup.sh
+chmod +x scripts/08-code-server/code-server-setup.sh
 ```
 
 ### 网络与代理
