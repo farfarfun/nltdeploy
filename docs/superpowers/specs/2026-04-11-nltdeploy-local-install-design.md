@@ -95,6 +95,7 @@
 ## 6. 一键安装脚本（入口）
 
 - **职责**：创建 `~/.local/nltdeploy` 下目录结构；将 `libexec/nltdeploy` 内容从发布包或 git 检出位置同步到目标根；生成或更新 `bin` 下全部薄包装；可选：检测并打印 `PATH` 配置提示。
+- **`curl …/install.sh | bash`**：无法解析到与 `install.sh` 同目录的 `scripts/` 时，在 **`${NLTDEPLOY_ROOT}/src/nltdeploy`**（可用 `NLTDEPLOY_SRC_DIR` 覆盖）执行 **`git clone`**：**优先 GitHub** `farfarfun/nltdeploy`，失败则 **Gitee** 同名；已存在 `.git` 时 **`git pull --ff-only`** 后再同步。需本机已安装 **`git`**。克隆 URL 可通过 `NLTDEPLOY_GITHUB_REPO` / `NLTDEPLOY_GITEE_REPO` 覆盖（fork/镜像）。
 - **不要求**：默认修改用户 shell 配置文件（可交互询问或文档说明手动 `export PATH`）。安装结束打印 PATH 提示的行为可通过 **`NLTDEPLOY_SKIP_PROFILE_HINT=1`** 关闭（与当前 `install.sh` 一致）。若将来增加「自动写入 profile」，再引入单独开关（例如 `NLTDEPLOY_SKIP_PROFILE=1`）关闭该行为。
 
 ---

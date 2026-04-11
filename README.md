@@ -28,9 +28,17 @@ chmod +x install.sh
 
 ```bash
 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/install.sh | bash
-# 国内（Gitee）
+# 国内（Gitee raw，脚本内容与 GitHub 相同）
 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/install.sh | bash
 ```
+
+管道执行时 **仅下载 `install.sh`**，脚本会在本机 **`git clone` 完整仓库** 到 **`${NLTDEPLOY_ROOT}/src/nltdeploy`**（默认即 `~/.local/nltdeploy/src/nltdeploy`），再从中同步 `scripts/` 到 `libexec`。克隆顺序：**优先 GitHub** `farfarfun/nltdeploy`，失败则 **Gitee** 同名仓库。需要已安装 **`git`**。若该目录已是 git 仓库，再次执行时会 **`git pull --ff-only`** 更新后再安装。
+
+可选覆盖克隆地址（fork 或镜像）：
+
+- **`NLTDEPLOY_GITHUB_REPO`**：默认 `https://github.com/farfarfun/nltdeploy.git`
+- **`NLTDEPLOY_GITEE_REPO`**：默认 `https://gitee.com/farfarfun/nltdeploy.git`
+- **`NLTDEPLOY_SRC_DIR`**：克隆目标目录（默认 `${NLTDEPLOY_ROOT}/src/nltdeploy`）
 
 **配置 PATH：**
 
@@ -42,6 +50,7 @@ export PATH="$HOME/.local/nltdeploy/bin:$PATH"
 
 - **`NLTDEPLOY_ROOT`**：安装根目录（默认 `~/.local/nltdeploy`）。
 - **`NLTDEPLOY_SKIP_PROFILE_HINT=1`**：安装结束时不打印 PATH 提示（适合 CI）。
+- **`NLTDEPLOY_GITHUB_REPO` / `NLTDEPLOY_GITEE_REPO` / `NLTDEPLOY_SRC_DIR`**：管道安装时的克隆源与目录（见上节）。
 
 本地验证安装逻辑：
 
