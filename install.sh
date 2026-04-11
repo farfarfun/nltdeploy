@@ -102,6 +102,7 @@ mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \
 mkdir -p "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" \
   "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net" \
   "${LIBEXEC}/paperclip" "${LIBEXEC}/code-server" "${LIBEXEC}/new-api" \
+  "${LIBEXEC}/services-status" \
   "${LIBEXEC}/_lib"
 
 cp -f "${SCRIPTS}/_lib/nlt-common.sh" "${LIBEXEC}/_lib/nlt-common.sh"
@@ -134,6 +135,9 @@ chmod 0755 "${LIBEXEC}/code-server/code-server-setup.sh"
 cp -f "${SCRIPTS}/09-new-api/new-api-setup.sh" "${LIBEXEC}/new-api/new-api-setup.sh"
 chmod 0755 "${LIBEXEC}/new-api/new-api-setup.sh"
 
+cp -f "${SCRIPTS}/10-services-status/services-status.sh" "${LIBEXEC}/services-status/services-status.sh"
+chmod 0755 "${LIBEXEC}/services-status/services-status.sh"
+
 # 用法: _emit_wrapper <bin 名> <libexec 内脚本相对路径> [传递给脚本的固定前缀参数...]
 _emit_wrapper() {
   local name="$1"
@@ -163,6 +167,7 @@ _emit_wrapper nlt-pip-sources pip-sources/deploy.sh
 _emit_wrapper nlt-python-env python-env/deploy.sh
 _emit_wrapper nlt-utils utils/utils-setup.sh
 _emit_wrapper nlt-github-net github-net/deploy.sh
+_emit_wrapper nlt-services-status services-status/services-status.sh
 
 _emit_wrapper nlt-airflow-install airflow/deploy.sh install
 _emit_wrapper nlt-airflow airflow/deploy.sh

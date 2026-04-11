@@ -9,7 +9,7 @@ export NLTDEPLOY_SKIP_GIT_PULL=1
 bash "${ROOT}/install.sh"
 bash "${ROOT}/install.sh" update
 for f in \
-  nlt-pip-sources nlt-python-env nlt-utils nlt-github-net \
+  nlt-pip-sources nlt-python-env nlt-utils nlt-github-net nlt-services-status \
   nlt-airflow-install nlt-airflow \
   nlt-service-airflow-start nlt-service-airflow-stop \
   nlt-service-airflow-restart nlt-service-airflow-status \
@@ -37,4 +37,5 @@ done
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/airflow/deploy.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/code-server/code-server-setup.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/new-api/new-api-setup.sh" || exit 1
+bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/services-status/services-status.sh" || exit 1
 echo "install_smoke OK"
