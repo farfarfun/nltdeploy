@@ -101,7 +101,7 @@ mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \
   "${NLTDEPLOY_ROOT}/share/nltdeploy" "${NLTDEPLOY_ROOT}/etc/nltdeploy"
 mkdir -p "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" \
   "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net" \
-  "${LIBEXEC}/paperclip" "${LIBEXEC}/code-server" \
+  "${LIBEXEC}/paperclip" "${LIBEXEC}/code-server" "${LIBEXEC}/new-api" \
   "${LIBEXEC}/_lib"
 
 cp -f "${SCRIPTS}/_lib/nlt-common.sh" "${LIBEXEC}/_lib/nlt-common.sh"
@@ -130,6 +130,9 @@ chmod 0755 "${LIBEXEC}/paperclip/paperclip-setup.sh"
 
 cp -f "${SCRIPTS}/08-code-server/code-server-setup.sh" "${LIBEXEC}/code-server/code-server-setup.sh"
 chmod 0755 "${LIBEXEC}/code-server/code-server-setup.sh"
+
+cp -f "${SCRIPTS}/09-new-api/new-api-setup.sh" "${LIBEXEC}/new-api/new-api-setup.sh"
+chmod 0755 "${LIBEXEC}/new-api/new-api-setup.sh"
 
 # 用法: _emit_wrapper <bin 名> <libexec 内脚本相对路径> [传递给脚本的固定前缀参数...]
 _emit_wrapper() {
@@ -197,6 +200,15 @@ _emit_wrapper nlt-service-code-server-stop code-server/code-server-setup.sh stop
 _emit_wrapper nlt-service-code-server-restart code-server/code-server-setup.sh restart
 _emit_wrapper nlt-service-code-server-status code-server/code-server-setup.sh status
 _emit_wrapper nlt-service-code-server-update code-server/code-server-setup.sh update
+
+_emit_wrapper nlt-new-api-install new-api/new-api-setup.sh install
+_emit_wrapper nlt-new-api new-api/new-api-setup.sh
+
+_emit_wrapper nlt-service-new-api-start new-api/new-api-setup.sh start
+_emit_wrapper nlt-service-new-api-stop new-api/new-api-setup.sh stop
+_emit_wrapper nlt-service-new-api-restart new-api/new-api-setup.sh restart
+_emit_wrapper nlt-service-new-api-status new-api/new-api-setup.sh status
+_emit_wrapper nlt-service-new-api-update new-api/new-api-setup.sh update
 
 if [[ "${NLTDEPLOY_SKIP_PROFILE_HINT:-}" != "1" ]]; then
   echo ""
