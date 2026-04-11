@@ -93,7 +93,7 @@
 ## 6. 一键安装脚本（入口）
 
 - **职责**：创建 `~/.local/nltdeploy` 下目录结构；将 `libexec/nltdeploy` 内容从发布包或 git 检出位置同步到目标根；生成或更新 `bin` 下全部薄包装；可选：检测并打印 `PATH` 配置提示。
-- **不要求**：默认修改用户 shell 配置文件（可交互询问或文档说明手动 `export PATH`）；若提供自动写入 profile，须可关闭（例如 `NLTDEPLOY_SKIP_PROFILE=1`）。
+- **不要求**：默认修改用户 shell 配置文件（可交互询问或文档说明手动 `export PATH`）。安装结束打印 PATH 提示的行为可通过 **`NLTDEPLOY_SKIP_PROFILE_HINT=1`** 关闭（与当前 `install.sh` 一致）。若将来增加「自动写入 profile」，再引入单独开关（例如 `NLTDEPLOY_SKIP_PROFILE=1`）关闭该行为。
 
 ---
 
