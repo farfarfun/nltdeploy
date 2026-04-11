@@ -13,15 +13,73 @@
 
 Python 包元数据见根目录 [`pyproject.toml`](pyproject.toml)（MIT）。命令行入口名在元数据中列为 `nltdeploy`，与 `src/` 下模块布局仍在演进；Shell 脚本是当前主力的使用方式。
 
+## 推荐：一键安装到 ~/.local/nltdeploy
+
+将仓库内脚本同步到 `~/.local/nltdeploy/libexec/nltdeploy/`，并在 `~/.local/nltdeploy/bin/` 生成以 `nlt-` / `nlt-service-` 开头的命令（实现与规格见 [`docs/superpowers/specs/2026-04-11-nltdeploy-local-install-design.md`](docs/superpowers/specs/2026-04-11-nltdeploy-local-install-design.md)）。
+
+**克隆仓库后本地安装：**
+
+```bash
+chmod +x install.sh
+./install.sh
+```
+
+**远程一行：**
+
+```bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/install.sh | bash
+# 国内（Gitee）
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/install.sh | bash
+```
+
+**配置 PATH：**
+
+```bash
+export PATH="$HOME/.local/nltdeploy/bin:$PATH"
+```
+
+可选环境变量：
+
+- **`NLTDEPLOY_ROOT`**：安装根目录（默认 `~/.local/nltdeploy`）。
+- **`NLTDEPLOY_SKIP_PROFILE_HINT=1`**：安装结束时不打印 PATH 提示（适合 CI）。
+
+本地验证安装逻辑：
+
+```bash
+bash tests/install_smoke.sh
+```
+
+### 命令对照表（安装后的 `bin` 与 `scripts/`）
+
+| 安装后的命令 | 对应原 scripts 用法 |
+|-------------|---------------------|
+| `nlt-pip-sources` | `scripts/01-configure-pip-sources/deploy.sh` |
+| `nlt-python-env` | `scripts/02-create-python-env/deploy.sh` |
+| `nlt-airflow-install` | `scripts/03-airflow/deploy.sh` install |
+| `nlt-airflow`（可接任意子命令；无参为 gum 菜单） | `scripts/03-airflow/deploy.sh` … |
+| `nlt-service-airflow-start` / `stop` / `restart` / `status` | 同上 `deploy.sh` 的 start / stop / restart / status |
+| `nlt-celery-install` | `scripts/04-celery/celery-setup.sh` install |
+| `nlt-service-celery-worker-start` | `celery-setup.sh` start-worker |
+| `nlt-service-celery-beat-start` | `celery-setup.sh` start-beat |
+| `nlt-service-celery-flower-start` | `celery-setup.sh` start-flower |
+| `nlt-service-celery-stop` | `celery-setup.sh` stop |
+| `nlt-service-celery-restart` | `celery-setup.sh` restart |
+| `nlt-service-celery-status` | `celery-setup.sh` status |
+| `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/05-utils/utils-setup.sh` … |
+| `nlt-github-net` | `scripts/06-github/deploy.sh` |
+
 ## 目录结构
 
 ```
 nltdeploy/
 ├── LICENSE
 ├── README.md
+├── install.sh                          # 一键安装 nlt-* 到 ~/.local/nltdeploy
 ├── pyproject.toml
 ├── examples/
 │   └── python_env_examples.md          # 与 uv/Python 环境相关的用法示例（偏命令行工具向）
+├── tests/
+│   └── install_smoke.sh                # 安装与 bin 包装冒烟测试
 └── scripts/
     ├── 01-configure-pip-sources/
     │   ├── deploy.sh
@@ -170,11 +228,12 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/de
 ## 通过 curl 执行时的公共约定
 
 - **`NONINTERACTIVE=1`**：两个主 deploy 脚本均支持，用于无 TTY 时跳过确认（见各脚本说明）。
-- **Fork 或自建 raw 地址**：部分脚本（如 `03-airflow`）会读取环境变量 **`nltdeploy_RAW_BASE`**（默认 `https://raw.githubusercontent.com/farfarfun/nltdeploy/master`），用于拉取同仓库下的 `utils-setup.sh` 等。国内可设为 Gitee：`export nltdeploy_RAW_BASE=https://gitee.com/farfarfun/nltdeploy/raw/master`。Fork 后可 `export nltdeploy_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>`。
+- **Fork 或自建 raw 地址**：部分脚本（如 `01`、`02`、`03-airflow`）会读取 **`NLTDEPLOY_RAW_BASE`**（若未设置则回退到 **`nltdeploy_RAW_BASE`**），默认 `https://raw.githubusercontent.com/farfarfun/nltdeploy/master`，用于拉取同仓库下的 `utils-setup.sh` 等。国内可设为 Gitee：`export NLTDEPLOY_RAW_BASE=https://gitee.com/farfarfun/nltdeploy/raw/master`。Fork 后可 `export NLTDEPLOY_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>`。仍支持仅设置 `nltdeploy_RAW_BASE` 的旧写法。
 
 ## 环境变量（跨脚本常见）
 
 - **`NONINTERACTIVE=1`**：非交互。
+- **`NLTDEPLOY_RAW_BASE`**：覆盖拉取本仓库 raw 脚本的根 URL（优先于 `nltdeploy_RAW_BASE`）。见上一节「通过 curl 执行时的公共约定」。
 - **`05-utils`** 另有 `GUM_HOME`、`GUM_TAG`、`GUM_USE_BREW`、`SKIP_GUM_SHELL_PROFILE`、`SKIP_UTILS_SHELL_ALIASES` 等，见 `utils-setup.sh` 头部。
 
 各专项脚本（Airflow、Celery、GitHub）的专有变量以各自文件头注释为准。
@@ -191,6 +250,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/de
 ### 脚本没有执行权限
 
 ```bash
+chmod +x install.sh
 chmod +x scripts/01-configure-pip-sources/deploy.sh
 chmod +x scripts/02-create-python-env/deploy.sh
 chmod +x scripts/03-airflow/deploy.sh
