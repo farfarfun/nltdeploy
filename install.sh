@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# 一键安装 nltdeploy 命令到 ~/.local/nltdeploy（可通过 NLTDEPLOY_ROOT 覆盖）。
-# 本地执行 install.sh：使用同目录下 scripts/。
-# curl …/install.sh | bash：在 NLTDEPLOY_ROOT 下 git clone（优先 GitHub，失败则 Gitee；同组织 farfarfun 同名 nltdeploy）。
+# 一键安装 / 更新 nltdeploy 到 ~/.local/nltdeploy（可通过 NLTDEPLOY_ROOT 覆盖）。
+# 用法: ./install.sh [install|update]   （install 与 update 等价：拉取上游后同步 libexec 与 bin）
+# 本地执行：使用与 install.sh 同目录的 scripts/；若为 git 仓库则自动 git pull。
+# curl …/install.sh | bash [ -s -- update ]：克隆到 NLTDEPLOY_SRC_DIR，每次执行会 pull 再同步。
 set -euo pipefail
 
 NLTDEPLOY_ROOT="${NLTDEPLOY_ROOT:-${HOME}/.local/nltdeploy}"
@@ -10,6 +11,35 @@ NLTDEPLOY_GITEE_REPO="${NLTDEPLOY_GITEE_REPO:-https://gitee.com/farfarfun/nltdep
 NLTDEPLOY_SRC_DIR="${NLTDEPLOY_SRC_DIR:-${NLTDEPLOY_ROOT}/src/nltdeploy}"
 
 die() { echo "错误: $*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+用法: install.sh [install|update]
+
+  install   安装或刷新 ~/.local/nltdeploy 下的 libexec 与 bin（默认）
+  update    与 install 相同：若 scripts 所在目录为 git 仓库，先 git pull --ff-only 再同步
+
+环境变量:
+  NLTDEPLOY_ROOT          安装根目录（默认 ~/.local/nltdeploy）
+  NLTDEPLOY_SKIP_GIT_PULL 设为 1 时不执行 git pull（仍会做文件同步）
+  NLTDEPLOY_SKIP_PROFILE_HINT 设为 1 时不打印 PATH 提示
+  NLTDEPLOY_GITHUB_REPO / NLTDEPLOY_GITEE_REPO / NLTDEPLOY_SRC_DIR  见 README
+EOF
+}
+
+# 解析子命令（管道执行时通常无参数，视为 install）
+_CMD="${1:-install}"
+case "${_CMD}" in
+  install | update) ;;
+  -h | --help | help)
+    usage
+    exit 0
+    ;;
+  *)
+    usage >&2
+    die "未知命令: ${_CMD}"
+    ;;
+esac
 
 # 若从仓库根执行（install.sh 为普通文件且旁侧有 scripts/），返回该 scripts 绝对路径；否则返回非 0。
 _resolve_scripts_from_install_sh() {
@@ -24,18 +54,16 @@ _resolve_scripts_from_install_sh() {
   return 1
 }
 
-# 将仓库克隆到 NLTDEPLOY_SRC_DIR，打印 scripts 目录绝对路径（其它信息走 stderr）。
-_clone_repo_for_scripts() {
+# 将仓库克隆到 NLTDEPLOY_SRC_DIR（若尚不存在）；打印 scripts 目录绝对路径（其它信息走 stderr）。
+_ensure_clone_for_scripts() {
   command -v git >/dev/null 2>&1 || die "通过管道安装需要 git。请安装 git 或在克隆后的仓库根目录执行 ./install.sh"
   mkdir -p "${NLTDEPLOY_ROOT}" "${NLTDEPLOY_ROOT}/src"
   local repo="${NLTDEPLOY_SRC_DIR}"
   if [[ -d "${repo}/.git" ]]; then
-    echo "更新本地仓库: ${repo}" >&2
-    git -C "${repo}" pull --ff-only || die "git pull 失败，请检查 ${repo}"
+    :
+  elif [[ -e "${repo}" ]]; then
+    die "路径已存在但不是 git 仓库，请删除或移走后重试: ${repo}"
   else
-    if [[ -e "${repo}" ]]; then
-      die "路径已存在但不是 git 仓库，请删除或移走后重试: ${repo}"
-    fi
     echo "正在从 GitHub 克隆 farfarfun/nltdeploy …" >&2
     if ! git clone --depth 1 "${NLTDEPLOY_GITHUB_REPO}" "${repo}"; then
       echo "GitHub 不可用，正在从 Gitee 克隆 farfarfun/nltdeploy …" >&2
@@ -46,13 +74,27 @@ _clone_repo_for_scripts() {
   echo "${repo}/scripts"
 }
 
+# scripts 的父目录若为 git 仓库，则拉取最新（可跳过）。
+_sync_git_upstream_for_scripts() {
+  local scripts_dir="$1"
+  local root
+  root="$(cd "$(dirname "$scripts_dir")" && pwd)"
+  [[ -d "${root}/.git" ]] || return 0
+  [[ "${NLTDEPLOY_SKIP_GIT_PULL:-}" == "1" ]] && return 0
+  command -v git >/dev/null 2>&1 || die "发现 git 仓库但未安装 git，无法更新: ${root}"
+  echo "正在拉取最新脚本: ${root}" >&2
+  git -C "${root}" pull --ff-only || die "git pull 失败: ${root}"
+}
+
 SCRIPTS=""
 if SCRIPTS="$(_resolve_scripts_from_install_sh)"; then
   :
 else
-  SCRIPTS="$(_clone_repo_for_scripts)"
+  SCRIPTS="$(_ensure_clone_for_scripts)"
 fi
 [[ -d "$SCRIPTS" ]] || die "找不到 scripts 目录: ${SCRIPTS}"
+
+_sync_git_upstream_for_scripts "$SCRIPTS"
 
 LIBEXEC="${NLTDEPLOY_ROOT}/libexec/nltdeploy"
 mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \

@@ -5,7 +5,9 @@ TMP="$(mktemp -d)"
 trap 'rm -rf "${TMP}"' EXIT
 export NLTDEPLOY_ROOT="${TMP}/nd"
 export NLTDEPLOY_SKIP_PROFILE_HINT=1
+export NLTDEPLOY_SKIP_GIT_PULL=1
 bash "${ROOT}/install.sh"
+bash "${ROOT}/install.sh" update
 for f in \
   nlt-pip-sources nlt-python-env nlt-utils nlt-github-net \
   nlt-airflow-install nlt-airflow \
