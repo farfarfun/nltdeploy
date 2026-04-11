@@ -68,12 +68,13 @@ bash tests/install_smoke.sh
 
 | 安装后的命令 | 对应原 scripts 用法 |
 |-------------|---------------------|
-| `nlt-pip-sources` | `scripts/01-configure-pip-sources/deploy.sh` |
-| `nlt-python-env` | `scripts/02-create-python-env/deploy.sh` |
+| `nlt-pip-sources` | `scripts/01-configure-pip-sources/deploy.sh`（无参时 gum 选 install/update/reinstall/uninstall） |
+| `nlt-python-env` | `scripts/02-create-python-env/deploy.sh`（无参时 gum 选子命令；见脚本头） |
 | `nlt-airflow-install` | `scripts/03-airflow/deploy.sh` install |
-| `nlt-airflow`（可接任意子命令；无参为 gum 菜单） | `scripts/03-airflow/deploy.sh` … |
-| `nlt-service-airflow-start` / `stop` / `restart` / `status` | 同上 `deploy.sh` 的 start / stop / restart / status |
+| `nlt-airflow`（可接任意子命令；无参为 gum 菜单） | `scripts/03-airflow/deploy.sh` …（含 `update`） |
+| `nlt-service-airflow-start` / `stop` / `restart` / `status` / **`update`** | 同上 `deploy.sh` 对应子命令 |
 | `nlt-celery-install` | `scripts/04-celery/celery-setup.sh` install |
+| `nlt-celery-update` | `celery-setup.sh` update |
 | `nlt-service-celery-worker-start` | `celery-setup.sh` start-worker |
 | `nlt-service-celery-beat-start` | `celery-setup.sh` start-beat |
 | `nlt-service-celery-flower-start` | `celery-setup.sh` start-flower |
@@ -81,7 +82,7 @@ bash tests/install_smoke.sh
 | `nlt-service-celery-restart` | `celery-setup.sh` restart |
 | `nlt-service-celery-status` | `celery-setup.sh` status |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/05-utils/utils-setup.sh` … |
-| `nlt-github-net` | `scripts/06-github/deploy.sh` |
+| `nlt-github-net` | `scripts/06-github/deploy.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
 
 ## 目录结构
 
@@ -95,21 +96,23 @@ nltdeploy/
 │   └── python_env_examples.md          # 与 uv/Python 环境相关的用法示例（偏命令行工具向）
 ├── tests/
 │   └── install_smoke.sh                # 安装与 bin 包装冒烟测试
-└── scripts/
-    ├── 01-configure-pip-sources/
-    │   ├── deploy.sh
-    │   └── README.md
-    ├── 02-create-python-env/
-    │   ├── deploy.sh
-    │   └── README.md
-    ├── 03-airflow/
-    │   └── deploy.sh                   # Airflow 3 本机 setup（见脚本头注释与用法）
-    ├── 04-celery/
-    │   └── celery-setup.sh
-    ├── 05-utils/
-    │   └── utils-setup.sh              # gum / 别名 / all
-    └── 06-github/
-        └── deploy.sh                   # Git 连通性诊断与修复
+├── scripts/
+│   ├── _lib/
+│   │   └── nlt-common.sh               # _nlt_ensure_gum 等公共片段（各 deploy 脚本 source）
+│   ├── 01-configure-pip-sources/
+│   │   ├── deploy.sh
+│   │   └── README.md
+│   ├── 02-create-python-env/
+│   │   ├── deploy.sh
+│   │   └── README.md
+│   ├── 03-airflow/
+│   │   └── deploy.sh                   # Airflow 3 本机 setup（见脚本头注释与用法）
+│   ├── 04-celery/
+│   │   └── celery-setup.sh
+│   ├── 05-utils/
+│   │   └── utils-setup.sh              # gum / 别名 / all
+│   └── 06-github/
+│       └── deploy.sh                   # Git 连通性诊断与修复
 ```
 
 带序号的前缀表示 **推荐的大致顺序**（先配 pip 与 Python，再按需装 Airflow/Celery 等）；`04`–`06` 可按需独立执行。

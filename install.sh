@@ -100,7 +100,11 @@ LIBEXEC="${NLTDEPLOY_ROOT}/libexec/nltdeploy"
 mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \
   "${NLTDEPLOY_ROOT}/share/nltdeploy" "${NLTDEPLOY_ROOT}/etc/nltdeploy"
 mkdir -p "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" \
-  "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net"
+  "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net" \
+  "${LIBEXEC}/_lib"
+
+cp -f "${SCRIPTS}/_lib/nlt-common.sh" "${LIBEXEC}/_lib/nlt-common.sh"
+chmod 0755 "${LIBEXEC}/_lib/nlt-common.sh"
 
 cp -f "${SCRIPTS}/01-configure-pip-sources/deploy.sh" "${LIBEXEC}/pip-sources/deploy.sh"
 chmod 0755 "${LIBEXEC}/pip-sources/deploy.sh"
@@ -157,8 +161,10 @@ _emit_wrapper nlt-service-airflow-start airflow/deploy.sh start
 _emit_wrapper nlt-service-airflow-stop airflow/deploy.sh stop
 _emit_wrapper nlt-service-airflow-restart airflow/deploy.sh restart
 _emit_wrapper nlt-service-airflow-status airflow/deploy.sh status
+_emit_wrapper nlt-service-airflow-update airflow/deploy.sh update
 
 _emit_wrapper nlt-celery-install celery/celery-setup.sh install
+_emit_wrapper nlt-celery-update celery/celery-setup.sh update
 
 _emit_wrapper nlt-service-celery-worker-start celery/celery-setup.sh start-worker
 _emit_wrapper nlt-service-celery-beat-start celery/celery-setup.sh start-beat

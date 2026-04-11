@@ -19,8 +19,11 @@
 #   ./airflow-setup.sh users-list                # 列举用户（同 airflow users list）
 #   ./airflow-setup.sh users-reset-password      # 重置密码（同 airflow users reset-password）
 #   ./airflow-setup.sh http-trigger <dag_id> [payload.json]   # HTTP 触发 DAG（见下「HTTP 触发」）
+#   ./airflow-setup.sh update          # 保留数据目录，升级依赖并执行 db / fab-db migrate
 #   ./airflow-setup.sh stop
 #   ./airflow-setup.sh uninstall        # 停止进程并删除 AIRFLOW_VENV 与 AIRFLOW_HOME（不可逆）
+#
+# 规范：NONINTERACTIVE=1 时跳过需确认的操作（见各命令说明）。
 #
 # HTTP 触发 DAG（Airflow 3 稳定 API，供其它系统调用；详见官方 Public API）：
 #   文档: https://airflow.apache.org/docs/apache-airflow/stable/security/api.html
@@ -61,38 +64,8 @@ FAB_AUTH_MANAGER_CLASS="airflow.providers.fab.auth_manager.fab_auth_manager.FabA
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
-# gum：与 README 一致使用 curl -LsSf … | bash（仅远端 URL，不引用仓库内其它脚本路径）。
-# nltdeploy_RAW_BASE 默认与 README 相同；其它 fork 请 export nltdeploy_RAW_BASE=https://raw.githubusercontent.com/<org>/<repo>/<branch>
-# 子脚本 utils-setup.sh 仍识别 GUM_HOME、GUM_TAG、GUM_USE_BREW（请在调用前 export）。
-_nltdeploy_RAW_BASE="${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}}"
-_GUM_UTILS_SETUP_URL="${_nltdeploy_RAW_BASE}/scripts/05-utils/utils-setup.sh"
-
-_ensure_gum_self_contained() {
-  export PATH="${HOME}/opt/gum/bin:${PATH}"
-  command -v gum >/dev/null 2>&1 && return 0
-
-  if [[ -x "${HOME}/opt/gum/bin/gum" ]]; then
-    export PATH="${HOME}/opt/gum/bin:${PATH}"
-    command -v gum >/dev/null 2>&1 && return 0
-  fi
-
-  command -v curl >/dev/null 2>&1 || {
-    echo "错误: 需要 curl（README：curl -LsSf … | bash）。" >&2
-    return 1
-  }
-
-  echo "未检测到 gum，执行: curl -LsSf ${_GUM_UTILS_SETUP_URL} | bash -s -- gum" >&2
-  curl -LsSf "${_GUM_UTILS_SETUP_URL}" | bash -s -- gum || {
-    echo "错误: 远端安装失败（检查网络或设置 nltdeploy_RAW_BASE）。" >&2
-    return 1
-  }
-
-  export PATH="${HOME}/opt/gum/bin:${PATH}"
-  command -v gum >/dev/null 2>&1 || {
-    echo "错误: gum 仍未可用（预期 ~/opt/gum/bin）。" >&2
-    return 1
-  }
-}
+# shellcheck source=../_lib/nlt-common.sh
+source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
 
 say_info() {
   gum style --foreground 212 "$*"
@@ -118,6 +91,7 @@ usage() {
 
 命令:
   install          在 ~/opt/airflow/venv 用 uv 创建/复用环境；按官方 constraints 安装 Airflow 核心 + FAB；db migrate + fab-db migrate
+  update           保留 AIRFLOW_HOME 数据，按当前 AIRFLOW_VERSION 与 constraints 升级依赖并执行 db / fab-db migrate
   start            后台启动 airflow standalone（写入 run/standalone.pid）
   stop             停止 standalone 进程组
   restart          stop 后 start
@@ -308,6 +282,32 @@ cmd_install() {
     }
   fi
   say_info "安装完成。下一步: $0 start"
+}
+
+cmd_update() {
+  require_uv
+  require_venv_airflow
+  ensure_dirs
+  say_info "==> 更新 Airflow（保留 ${AIRFLOW_HOME} 数据与配置）"
+  activate_venv
+  local curl_url
+  curl_url="$(constraint_url)"
+  say_info "==> 升级 pip 与 Airflow 依赖（constraints）..."
+  uv pip install --python "${AIRFLOW_VENV}/bin/python" --upgrade pip
+  uv pip install --python "${AIRFLOW_VENV}/bin/python" \
+    "apache-airflow==${AIRFLOW_VERSION}" \
+    "apache-airflow-providers-fab" \
+    --constraint "${curl_url}"
+  activate_venv
+  say_info "==> 数据库迁移（Airflow 核心）..."
+  airflow db migrate
+  say_info "==> FAB 元数据迁移..."
+  if airflow fab-db migrate; then
+    :
+  else
+    echo "警告: airflow fab-db migrate 未成功，请查看上方报错。" >&2
+  fi
+  say_info "更新完成。"
 }
 
 process_alive() {
@@ -680,6 +680,7 @@ dispatch() {
   shift || true
   case "$cmd" in
     install) cmd_install ;;
+    update) cmd_update ;;
     start) cmd_start ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
@@ -709,7 +710,7 @@ interactive_main() {
   while true; do
     local pick
     pick="$(gum choose --header "Airflow 本地 — 选择操作（取消退出）" \
-      "install" "start" "stop" "restart" "status" \
+      "install" "update" "start" "stop" "restart" "status" \
       "dag-scaffold" "dags-list" "trigger" "task-test" \
       "users-create" "users-list" "users-reset-password" "http-trigger" \
       "uninstall" "help" "quit")" || break
@@ -760,7 +761,7 @@ main() {
         ;;
     esac
   fi
-  _ensure_gum_self_contained || exit 1
+  _nlt_ensure_gum || exit 1
   if [[ $# -eq 0 ]]; then
     interactive_main
     return 0

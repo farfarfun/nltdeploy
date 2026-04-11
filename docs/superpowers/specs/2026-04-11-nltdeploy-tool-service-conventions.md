@@ -91,7 +91,7 @@
   - `_nlt_ensure_gum`（或 `source` 公共片段）
   - `cmd_install` / `cmd_update` / `cmd_start` …
   - `main "$@"`：`case`/`if` 分发子命令
-- **公共逻辑**：可将 `_nlt_ensure_gum`、统一样式输出（`say_info` 等）收敛到 `libexec/nltdeploy/common/*.sh`（或 `scripts/_lib/`），由各域 `source`，避免复制粘贴漂移。
+- **公共逻辑**：`_nlt_ensure_gum` 已落在仓库 **`scripts/_lib/nlt-common.sh`**（安装后同步到 `libexec/nltdeploy/_lib/`），各域脚本 `source` 该文件；统一样式输出仍可按域保留（如 `gum style`）。
 
 ---
 
@@ -108,7 +108,7 @@
 
 ## 7. 与现状的差异（迁移说明）
 
-当前 Airflow、Celery 等脚本已具备部分子命令与 gum 菜单，但 **未必** 同时具备本规范中的全部必选子命令（例如部分域缺少显式 `update`、`reinstall`）。后续改造应 **按域补齐** 上表，并统一 `_nlt_ensure_gum` 与「有参直执行」的入口逻辑，而非一次性改变所有脚本行为。
+已实现（持续迭代中）：Airflow 增加 **`update`** 并统一 **`_nlt_ensure_gum`**；Celery 增加 **`update`**、无参 **gum** 菜单及 **`NONINTERACTIVE`** 下的 restart 行为；pip / Python 环境 / GitHub 网络工具补齐 **install / update / reinstall / uninstall** 形态与无参 gum 入口（`05-utils` 仍以安装 gum 为主，未强制四字命令）。若某域仍有 read 交互，可逐步改为 gum。
 
 ---
 
@@ -117,3 +117,4 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-04-11 | 首版：工具/服务必选子命令、gum 策略、参数直执行与 bin 命名关系。 |
+| 2026-04-11 | 补充：`scripts/_lib/nlt-common.sh`；Airflow/Celery/GitHub/pip/Python-env 按规范首轮改造说明。 |

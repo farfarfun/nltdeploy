@@ -16,6 +16,7 @@
 #   ./celery-setup.sh status
 #
 # 环境变量：
+#   NONINTERACTIVE=1         跳过 gum 确认（如 restart 中是否启动 beat/flower）
 #   CELERY_HOME              覆盖 Celery 安装目录（默认 ~/opt/celery）
 #   CELERY_VENV              虚拟环境路径（默认 ${CELERY_HOME}/venv）
 #   CELERY_BROKER_URL        Broker URL（默认 redis://localhost:6379/0）
@@ -29,6 +30,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/nlt-common.sh
+source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
 
 usage() {
   cat <<'USAGE'
@@ -37,7 +40,8 @@ usage() {
 
 命令:
   install          创建 venv；安装 celery、redis、flower（可选）；未设 CELERY_APP 时生成 scaffold 示例
-  start [1-4]      二次交互选择：1=all, 2=worker, 3=beat, 4=flower；可传参跳过交互如 start 1
+  update           在已有 venv 内升级 pip、celery、redis、flower（需先 install）
+  start [1-4]      无参时用 gum 选择；或 1=all, 2=worker, 3=beat, 4=flower
   start-beat       后台启动 Celery beat
   start-flower     后台启动 Flower（Web 监控，需已安装 flower）
   stop             停止 worker/beat/flower 进程组
@@ -260,18 +264,28 @@ ENV
   echo "安装完成。可执行: $0 start 一键启动 worker/beat/flower"
 }
 
+cmd_update() {
+  require_venv_celery
+  ensure_dirs
+  echo "==> 更新 Celery 依赖（保留 ${CELERY_HOME} 数据）..."
+  activate_venv
+  pip install --upgrade pip
+  pip install -U celery redis flower
+  echo "更新完成。"
+}
+
 cmd_start() {
   local choice="${1:-}"
   if [[ -z "$choice" ]]; then
-    echo ""
-    echo "==> 选择要启动的组件"
-    echo "  1) all    - 同时启动 worker、beat、flower"
-    echo "  2) worker - 仅启动 Celery worker"
-    echo "  3) beat   - 仅启动 Celery beat"
-    echo "  4) flower - 仅启动 Flower 监控"
-    echo "  0) 返回"
-    echo ""
-    read -r -e -p "请选择 [1-4, 0 返回]: " choice || return 0
+    local pick
+    pick="$(gum choose --header "选择要启动的组件" \
+      "1 all（worker+beat+flower）" \
+      "2 worker" \
+      "3 beat" \
+      "4 flower" \
+      "0 取消")" || return 0
+    [[ -z "$pick" ]] && return 0
+    choice="${pick%% *}"
   fi
   case "${choice:-0}" in
     1)
@@ -302,8 +316,8 @@ cmd_start_worker() {
   ensure_scaffold
   if ! check_redis; then
     echo "警告: 无法连接 Redis，worker 可能无法启动。请先启动 Redis 或检查 CELERY_BROKER_URL。" >&2
-    if [[ -t 0 ]]; then
-      read -r -e -p "按回车继续尝试启动，或 Ctrl+C 取消: "
+    if [[ "${NONINTERACTIVE:-}" != "1" ]] && [[ -t 0 ]]; then
+      gum confirm "仍尝试启动 worker？" || return 0
     fi
   fi
   local existing
@@ -391,14 +405,15 @@ cmd_restart() {
   cmd_stop || true
   echo ""
   cmd_start_worker
+  if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
+    return 0
+  fi
   echo ""
-  read -r -e -p "是否同时启动 beat? [y/N]: " ans || ans="N"
-  if [[ "${ans:-N}" =~ ^[yY] ]]; then
+  if gum confirm "是否同时启动 beat？"; then
     cmd_start_beat
   fi
   echo ""
-  read -r -e -p "是否同时启动 flower? [y/N]: " ans || ans="N"
-  if [[ "${ans:-N}" =~ ^[yY] ]]; then
+  if gum confirm "是否同时启动 flower？"; then
     cmd_start_flower
   fi
 }
@@ -476,6 +491,7 @@ dispatch() {
   shift || true
   case "$cmd" in
     install) cmd_install ;;
+    update) cmd_update ;;
     start) cmd_start "$@" ;;
     start-worker) cmd_start_worker ;;
     start-beat) cmd_start_beat ;;
@@ -492,62 +508,39 @@ dispatch() {
   esac
 }
 
-print_interactive_menu() {
-  cat <<'MENU'
-
--------- Celery 管理菜单（输入序号或命令名）--------
-  1 install        2 start（二次选择）  3 stop        4 restart
-  5 status
-  0 完整帮助       q 退出
-------------------------------------------------------
-MENU
-}
-
 interactive_main() {
-  echo "--- Celery 管理交互模式 ---"
-  echo "CELERY_HOME=${CELERY_HOME}"
-  echo "CELERY_BROKER_URL=${CELERY_BROKER_URL}"
+  gum style --bold --foreground 212 "Celery 本地助手"
+  gum style "CELERY_HOME=${CELERY_HOME}"
+  gum style "CELERY_BROKER_URL=${CELERY_BROKER_URL}"
   echo ""
-  local line
   set +e
   while true; do
-    print_interactive_menu
-    if ! IFS= read -r -e -p "celery-setup> " line; then
-      printf '\n'
-      break
-    fi
-    [[ -z "${line//[$' \t']/}" ]] && continue
-    local args
-    read -ra args <<<"$line"
-    local icmd="${args[0]}"
-    if [[ "$icmd" =~ ^[0-9]+$ ]]; then
-      case "$icmd" in
-        0) usage; continue ;;
-        1) ( dispatch install ); continue ;;
-        2) ( dispatch start ); continue ;;
-        3) ( dispatch stop ); continue ;;
-        4) ( dispatch restart ); continue ;;
-        5) ( dispatch status ); continue ;;
-        *)
-          echo "无效序号（1–5 或 0）。输入 0 查看帮助。" >&2
-          continue ;;
-      esac
-    fi
-    case "$icmd" in
-      quit|exit|q) break ;;
-      '?'|help|-h|--help) usage; continue ;;
+    local pick
+    pick="$(gum choose --header "选择操作（取消退出）" \
+      "install" "update" "start" "stop" "restart" "status" \
+      "start-worker" "start-beat" "start-flower" \
+      "help" "quit")" || break
+    [[ -z "$pick" ]] && break
+    case "$pick" in
+      quit) break ;;
+      help) usage; continue ;;
     esac
-    local rest=()
-    local i
-    for ((i = 1; i < ${#args[@]}; i++)); do
-      rest+=("${args[i]}")
-    done
-    ( dispatch "$icmd" "${rest[@]}" )
+    ( dispatch "$pick" )
+    echo ""
   done
   set -e
 }
 
 main() {
+  if [[ $# -gt 0 ]]; then
+    case "$1" in
+      help | -h | --help)
+        dispatch "$@"
+        return 0
+        ;;
+    esac
+  fi
+  _nlt_ensure_gum || exit 1
   if [[ $# -eq 0 ]]; then
     interactive_main
     return 0

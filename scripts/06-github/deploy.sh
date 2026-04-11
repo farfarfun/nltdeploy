@@ -2,7 +2,12 @@
 # 修复「GitHub 网页能访问，但 git clone 失败」的常见网络问题。
 #
 # 用法：
-#   ./deploy.sh                 # 全程 gum 交互：诊断 + 选择修复方案
+#   ./deploy.sh                  # 无参：gum 交互诊断 + 选择修复
+#   ./deploy.sh install          # 自动诊断并应用推荐修复（同 fix_auto）
+#   ./deploy.sh update           # 仅诊断
+#   ./deploy.sh reinstall        # 再次自动修复（交互确认）
+#   ./deploy.sh uninstall        # 提示如何撤销本脚本写入的 SSH/Git 片段
+#   NONINTERACTIVE=1             # 跳过 gum 确认（install/reinstall 直接执行）
 #
 # 自动处理流程（已固化到脚本）：
 #   1) 诊断三条通道：HTTPS(443) / SSH(22) / SSH(443)
@@ -11,6 +16,10 @@
 #   4) 用 git ls-remote 做最终连通性验证并给出结果
 
 set -euo pipefail
+
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../_lib/nlt-common.sh
+source "${_SCRIPT_DIR}/../_lib/nlt-common.sh"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 SSH_CONFIG_PATH="${HOME}/.ssh/config"
@@ -252,10 +261,6 @@ fix_auto() {
 }
 
 interactive_main() {
-  command -v gum >/dev/null 2>&1 || {
-    err "未检测到 gum，请先安装 gum 后再运行。"
-    exit 1
-  }
   diagnose
   say
   while true; do
@@ -315,8 +320,72 @@ interactive_main() {
   done
 }
 
+usage_github() {
+  cat <<EOF
+用法: ${SCRIPT_NAME} [install|update|reinstall|uninstall|help]
+
+  install    自动诊断并应用推荐修复（默认与非交互管线）
+  update     仅运行诊断并给出建议
+  reinstall  再次执行自动修复（TTY 下 gum 确认）
+  uninstall  打印如何手动撤销 SSH/Git 配置中的 nltdeploy 片段
+  help       本说明
+
+环境: NONINTERACTIVE=1 时 install/reinstall 不弹出确认。
+EOF
+}
+
+dispatch_github() {
+  local c="${1:-install}"
+  shift || true
+  case "$c" in
+    install)
+      fix_auto
+      ;;
+    update)
+      diagnose
+      ;;
+    reinstall)
+      if [[ "${NONINTERACTIVE:-}" == "1" ]] || ! [[ -t 0 ]]; then
+        fix_auto
+      else
+        if gum confirm "将重新执行自动修复（可能改写 git/ssh 配置），继续？"; then
+          fix_auto
+        else
+          say_warn "已取消。"
+        fi
+      fi
+      ;;
+    uninstall)
+      say_warn "卸载请手动："
+      say "  1) 编辑 ~/.ssh/config，删除标记为 # >>> nltdeploy github ssh443 >>> … # <<< nltdeploy github ssh443 <<< 的区块"
+      say "  2) 运行 git config --global --list 检查 url.*.insteadOf，按需 git config --global --unset-all …"
+      say "  3) SSH 配置备份可能在 ~/.ssh/config.bak.nltdeploy.*"
+      ;;
+    help | -h | --help)
+      usage_github
+      ;;
+    *)
+      err "未知命令: $c"
+      usage_github >&2
+      exit 2
+      ;;
+  esac
+}
+
 main() {
-  interactive_main
+  _nlt_ensure_gum || exit 1
+  if [[ $# -eq 0 ]]; then
+    interactive_main
+    return 0
+  fi
+  case "$1" in
+    help | -h | --help)
+      usage_github
+      ;;
+    *)
+      dispatch_github "$@"
+      ;;
+  esac
 }
 
 main "$@"

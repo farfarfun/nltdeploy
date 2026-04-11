@@ -5,36 +5,9 @@
 
 set -e  # 遇到错误立即退出
 
-# gum：与 README 一致「curl -LsSf … | bash」。nltdeploy_RAW_BASE 可覆盖 raw 根路径。
-_nltdeploy_RAW_BASE="${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}}"
-_GUM_UTILS_SETUP_URL="${_nltdeploy_RAW_BASE}/scripts/05-utils/utils-setup.sh"
-
-_ensure_gum_self_contained() {
-    export PATH="${HOME}/opt/gum/bin:${PATH}"
-    command -v gum >/dev/null 2>&1 && return 0
-
-    if [[ -x "${HOME}/opt/gum/bin/gum" ]]; then
-        export PATH="${HOME}/opt/gum/bin:${PATH}"
-        command -v gum >/dev/null 2>&1 && return 0
-    fi
-
-    command -v curl >/dev/null 2>&1 || {
-        echo "错误: 需要 curl（README：curl -LsSf … | bash）。" >&2
-        return 1
-    }
-
-    echo "未检测到 gum，执行: curl -LsSf ${_GUM_UTILS_SETUP_URL} | bash -s -- gum" >&2
-    curl -LsSf "${_GUM_UTILS_SETUP_URL}" | bash -s -- gum || {
-        echo "错误: 远端安装失败（网络或 nltdeploy_RAW_BASE）。" >&2
-        return 1
-    }
-
-    export PATH="${HOME}/opt/gum/bin:${PATH}"
-    command -v gum >/dev/null 2>&1 || {
-        echo "错误: gum 仍未可用（预期 ~/opt/gum/bin）。" >&2
-        return 1
-    }
-}
+_NLT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../_lib" && pwd)"
+# shellcheck source=../_lib/nlt-common.sh
+source "${_NLT_LIB}/nlt-common.sh"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -339,9 +312,101 @@ activate_environment() {
     fi
 }
 
+# 更新已存在环境中的基础包（默认版本路径；可通过 PYTHON_VERSION 覆盖）
+cmd_pyenv_update() {
+    check_uv
+    local ver="${PYTHON_VERSION:-$DEFAULT_VERSION}"
+    local num
+    num=$(echo "$ver" | tr -d '.')
+    ENV_PATH="$HOME/opt/py${num}"
+    if [ ! -x "$ENV_PATH/bin/python" ]; then
+        print_error "未找到环境 $ENV_PATH，请先 install 或设置 PYTHON_VERSION"
+        exit 1
+    fi
+    print_info "更新 $ENV_PATH 内基础包..."
+    for package in "${PACKAGES[@]}"; do
+        uv pip install --python "$ENV_PATH/bin/python" -U "$package" || exit 1
+    done
+    print_info "update 完成。"
+}
+
+# 删除并重建默认版本环境
+cmd_pyenv_reinstall() {
+    _nlt_ensure_gum || exit 1
+    if [ "${NONINTERACTIVE:-}" != "1" ]; then
+        gum confirm "将删除并重建 Python ${DEFAULT_VERSION} 环境（~/opt/py*），继续？" || exit 0
+    fi
+    PYTHON_VERSION="$DEFAULT_VERSION"
+    local num
+    num=$(echo "$PYTHON_VERSION" | tr -d '.')
+    ENV_PATH="$HOME/opt/py${num}"
+    rm -rf "$ENV_PATH"
+    check_uv
+    create_directory
+    print_info "正在创建 Python ${PYTHON_VERSION} 环境: $ENV_PATH"
+    uv venv "$ENV_PATH" --python "$PYTHON_VERSION" || exit 1
+    for package in "${PACKAGES[@]}"; do
+        print_info "正在安装: $package"
+        uv pip install --python "$ENV_PATH/bin/python" "$package" || exit 1
+    done
+    print_info "reinstall 完成: $ENV_PATH"
+}
+
+# 删除所选版本环境（交互选版本；NONINTERACTIVE=1 时删默认版本）
+cmd_pyenv_uninstall() {
+    _nlt_ensure_gum || exit 1
+    if [ "${NONINTERACTIVE:-}" = "1" ]; then
+        PYTHON_VERSION="$DEFAULT_VERSION"
+        local num
+        num=$(echo "$PYTHON_VERSION" | tr -d '.')
+        ENV_PATH="$HOME/opt/py${num}"
+    else
+        select_python_version
+    fi
+    if [ "${NONINTERACTIVE:-}" != "1" ]; then
+        gum confirm "永久删除 $ENV_PATH？" || exit 0
+    fi
+    rm -rf "$ENV_PATH"
+    print_info "已删除 $ENV_PATH"
+}
+
+nlt_cli_main() {
+    if [ $# -eq 0 ]; then
+        _nlt_ensure_gum || exit 1
+        local pick
+        pick=$(gum choose --header "Python 环境 (uv)" \
+            "install" "update" "reinstall" "uninstall" "help") || exit 0
+        [ -z "$pick" ] && exit 0
+        [ "$pick" = "help" ] && { print_info "子命令: install | update | reinstall | uninstall；环境变量见脚本头部"; exit 0; }
+        set -- "$pick"
+    fi
+    case "$1" in
+        install)
+            shift
+            main "$@"
+            ;;
+        update)
+            cmd_pyenv_update
+            ;;
+        reinstall)
+            cmd_pyenv_reinstall
+            ;;
+        uninstall)
+            cmd_pyenv_uninstall
+            ;;
+        help | -h | --help)
+            print_info "子命令: install | update | reinstall | uninstall"
+            exit 0
+            ;;
+        *)
+            main "$@"
+            ;;
+    esac
+}
+
 # 主函数
 main() {
-    _ensure_gum_self_contained || exit 1
+    _nlt_ensure_gum || exit 1
     print_info "开始设置Python环境..."
     echo ""
     
@@ -358,5 +423,5 @@ main() {
     print_info "脚本执行完成！"
 }
 
-# 执行主函数
-main
+# 执行主函数（无参时 gum 选子命令）
+nlt_cli_main "$@"

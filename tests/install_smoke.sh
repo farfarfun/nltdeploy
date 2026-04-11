@@ -13,7 +13,8 @@ for f in \
   nlt-airflow-install nlt-airflow \
   nlt-service-airflow-start nlt-service-airflow-stop \
   nlt-service-airflow-restart nlt-service-airflow-status \
-  nlt-celery-install \
+  nlt-service-airflow-update \
+  nlt-celery-install nlt-celery-update \
   nlt-service-celery-worker-start nlt-service-celery-beat-start \
   nlt-service-celery-flower-start nlt-service-celery-stop \
   nlt-service-celery-restart nlt-service-celery-status

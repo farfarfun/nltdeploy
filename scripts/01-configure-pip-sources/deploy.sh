@@ -5,36 +5,9 @@
 
 set -e  # 遇到错误立即退出
 
-# gum：与 README 一致「curl -LsSf … | bash」。nltdeploy_RAW_BASE 可覆盖 raw 根路径。
-_nltdeploy_RAW_BASE="${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}}"
-_GUM_UTILS_SETUP_URL="${_nltdeploy_RAW_BASE}/scripts/05-utils/utils-setup.sh"
-
-_ensure_gum_self_contained() {
-    export PATH="${HOME}/opt/gum/bin:${PATH}"
-    command -v gum >/dev/null 2>&1 && return 0
-
-    if [[ -x "${HOME}/opt/gum/bin/gum" ]]; then
-        export PATH="${HOME}/opt/gum/bin:${PATH}"
-        command -v gum >/dev/null 2>&1 && return 0
-    fi
-
-    command -v curl >/dev/null 2>&1 || {
-        echo "错误: 需要 curl（README：curl -LsSf … | bash）。" >&2
-        return 1
-    }
-
-    echo "未检测到 gum，执行: curl -LsSf ${_GUM_UTILS_SETUP_URL} | bash -s -- gum" >&2
-    curl -LsSf "${_GUM_UTILS_SETUP_URL}" | bash -s -- gum || {
-        echo "错误: 远端安装失败（网络或 nltdeploy_RAW_BASE）。" >&2
-        return 1
-    }
-
-    export PATH="${HOME}/opt/gum/bin:${PATH}"
-    command -v gum >/dev/null 2>&1 || {
-        echo "错误: gum 仍未可用（预期 ~/opt/gum/bin）。" >&2
-        return 1
-    }
-}
+_NLT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../_lib" && pwd)"
+# shellcheck source=../_lib/nlt-common.sh
+source "${_NLT_LIB}/nlt-common.sh"
 
 # 颜色输出
 RED='\033[0;31m'
@@ -1353,6 +1326,57 @@ show_info() {
     echo ""
 }
 
+# 使用最近一次备份恢复 pip 配置（工具规范 uninstall）
+cmd_pip_uninstall_restore() {
+    parse_args "$@"
+    if [ "$SHOW_HELP" = "true" ]; then
+        show_help
+        exit 0
+    fi
+    determine_pip_config_path
+    local base_name backup_file
+    base_name=$(basename "$PIP_CONFIG_FILE")
+    backup_file=$(ls -t "${PIP_CONFIG_DIR}/${base_name}".backup.* 2>/dev/null | head -1 || true)
+    if [ -z "$backup_file" ] || [ ! -f "$backup_file" ]; then
+        print_error "未找到 ${PIP_CONFIG_DIR}/${base_name}.backup.*，无法自动恢复。"
+        exit 1
+    fi
+    _nlt_ensure_gum || exit 1
+    if [ "${NONINTERACTIVE:-}" != "1" ]; then
+        gum confirm "用备份恢复 pip 配置？ ${backup_file} -> ${PIP_CONFIG_FILE}" || exit 0
+    fi
+    cp "$backup_file" "$PIP_CONFIG_FILE"
+    print_info "已从备份恢复: ${PIP_CONFIG_FILE}"
+}
+
+nlt_cli_main() {
+    if [ $# -eq 0 ]; then
+        _nlt_ensure_gum || exit 1
+        local pick
+        pick=$(gum choose --header "pip 源配置（nltdeploy 工具）" \
+            "install" "update" "reinstall" "uninstall" "help") || exit 0
+        [ -z "$pick" ] && exit 0
+        set -- "$pick"
+    fi
+    case "$1" in
+        help | -h | --help)
+            show_help
+            exit 0
+            ;;
+        install | update | reinstall)
+            shift
+            main "$@"
+            ;;
+        uninstall)
+            shift
+            cmd_pip_uninstall_restore "$@"
+            ;;
+        *)
+            main "$@"
+            ;;
+    esac
+}
+
 # 主函数
 main() {
     # 解析命令行参数
@@ -1364,7 +1388,7 @@ main() {
         exit 0
     fi
 
-    _ensure_gum_self_contained || exit 1
+    _nlt_ensure_gum || exit 1
     
     # 如果指定了单个源，提示用户现在支持多源配置
     if [ -n "$SELECTED_SOURCE" ]; then
@@ -1409,5 +1433,5 @@ main() {
     print_info "脚本执行完成！"
 }
 
-# 执行主函数
-main "$@"
+# 执行主函数（无参时 gum 选子命令）
+nlt_cli_main "$@"
