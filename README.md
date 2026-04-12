@@ -13,7 +13,7 @@
 - **07-paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，数据目录见上游 `~/.paperclip/…`。
 - **08-code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。
 - **09-new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 3000**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。
-- **10-services-status**：**`nlt-services-status`** 一次性查看 Airflow、Celery、Paperclip、code-server、new-api 的 PID、默认端口与 HTTP 探测（可选 `--no-http`）。
+- **10-services**：**`nlt-services`** 总入口——**`status`** 汇总各常驻服务 PID/端口/HTTP 探测；**`install`** 用 gum 或参数选择模块并调用对应 **`nlt-*-install`**（及 pip / python-env / utils / github-net 交互入口）。
 
 Python 包元数据见根目录 [`pyproject.toml`](pyproject.toml)（MIT）。命令行入口名在元数据中列为 `nltdeploy`，与 `src/` 下模块布局仍在演进；Shell 脚本是当前主力的使用方式。
 
@@ -89,7 +89,7 @@ bash tests/install_smoke.sh
 | `nlt-service-celery-status` | `celery-setup.sh` status |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/05-utils/utils-setup.sh` … |
 | `nlt-github-net` | `scripts/06-github/deploy.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
-| `nlt-services-status` | `scripts/10-services-status/services-status.sh`（可加 `--no-http`；汇总各服务 PID / 端口） |
+| `nlt-services` | `scripts/10-services/services.sh`（无参 gum；`status` / `install [名称]`；status 可加 `--no-http`） |
 | `nlt-paperclip-install` | `scripts/07-paperclip/paperclip-setup.sh` install（git clone + pnpm install） |
 | `nlt-paperclip` | 同上，透传子命令；无参为 gum 菜单 |
 | `nlt-service-paperclip-start` / `stop` / `restart` / `status` / `update` | 同上 `paperclip-setup.sh` 对应子命令 |
@@ -135,11 +135,11 @@ nltdeploy/
 │   │   └── code-server-setup.sh        # code-server 官方包下载与启停
 │   ├── 09-new-api/
 │   │   └── new-api-setup.sh            # new-api Release 二进制与启停
-│   └── 10-services-status/
-│       └── services-status.sh          # 汇总各常驻服务 PID / 端口 / HTTP 探测
+│   └── 10-services/
+│       └── services.sh                 # nlt-services：status + install 聚合入口
 ```
 
-带序号的前缀表示 **推荐的大致顺序**（先配 pip 与 Python，再按需装 Airflow/Celery 等）；`04`–`09` 可按需独立执行。**`10`** 为查看型工具，可随时运行。
+带序号的前缀表示 **推荐的大致顺序**（先配 pip 与 Python，再按需装 Airflow/Celery 等）；`04`–`09` 可按需独立执行。**`10`** 为 **`nlt-services`** 总入口（查看 `status`、跳转 `install`），可随时运行。
 
 ## 快速开始
 
@@ -258,7 +258,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/de
 | `07-paperclip` | `paperclip-setup.sh` | 克隆 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)、pnpm 安装与启停 |
 | `08-code-server` | `code-server-setup.sh` | 下载 [coder/code-server](https://github.com/coder/code-server) standalone 包并启停 |
 | `09-new-api` | `new-api-setup.sh` | 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) Release 二进制并启停 |
-| `10-services-status` | `services-status.sh` | **`nlt-services-status`**：汇总 Airflow / Celery / Paperclip / code-server / new-api 运行与端口 |
+| `10-services` | `services.sh` | **`nlt-services`**：`status` 汇总运行与端口；`install` 跳转各模块安装入口 |
 
 子目录中的详细说明：
 
@@ -309,7 +309,7 @@ chmod +x scripts/06-github/deploy.sh
 chmod +x scripts/07-paperclip/paperclip-setup.sh
 chmod +x scripts/08-code-server/code-server-setup.sh
 chmod +x scripts/09-new-api/new-api-setup.sh
-chmod +x scripts/10-services-status/services-status.sh
+chmod +x scripts/10-services/services.sh
 ```
 
 ### 网络与代理
