@@ -15,7 +15,7 @@
 #   PAPERCLIP_SERVICE_HOME   本脚本管理根目录（默认 ~/opt/paperclip）
 #   PAPERCLIP_REPO_URL       上游 Git（默认 https://github.com/paperclipai/paperclip.git）
 #   PAPERCLIP_GIT_BRANCH     克隆分支（默认 main）
-#   PAPERCLIP_PORT           健康检查端口（默认 3100）
+#   PAPERCLIP_PORT           监听与健康检查端口（默认 8804；启动时 export PORT 同值）
 #   NONINTERACTIVE=1         跳过 gum 确认
 #   PAPERCLIP_UNINSTALL_YES=1  非 TTY 卸载确认
 
@@ -36,7 +36,7 @@ fi
 PAPERCLIP_SERVICE_HOME="${PAPERCLIP_SERVICE_HOME:-${HOME}/opt/paperclip}"
 PAPERCLIP_REPO_URL="${PAPERCLIP_REPO_URL:-https://github.com/paperclipai/paperclip.git}"
 PAPERCLIP_GIT_BRANCH="${PAPERCLIP_GIT_BRANCH:-main}"
-PAPERCLIP_PORT="${PAPERCLIP_PORT:-3100}"
+PAPERCLIP_PORT="${PAPERCLIP_PORT:-8804}"
 
 PAPERCLIP_SRC="${PAPERCLIP_SRC:-${PAPERCLIP_SERVICE_HOME}/src/paperclip}"
 PAPERCLIP_RUN_DIR="${PAPERCLIP_SERVICE_HOME}/run"
@@ -168,6 +168,7 @@ cmd_start() {
   echo "==> 启动 Paperclip（pnpm paperclipai run），日志: ${LOG_FILE}" >&2
   echo "    默认 UI/API: http://127.0.0.1:${PAPERCLIP_PORT}" >&2
   pushd "${PAPERCLIP_SRC}" >/dev/null
+  export PORT="${PAPERCLIP_PORT}"
   nohup pnpm paperclipai run >>"${LOG_FILE}" 2>&1 &
   local cpid=$!
   echo "$cpid" >"$PID_FILE"

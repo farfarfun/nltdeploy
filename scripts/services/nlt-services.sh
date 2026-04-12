@@ -33,7 +33,7 @@ usage() {
   无参数：gum 菜单（status / install / help / quit）。
 
 命令:
-  status [--no-http]    汇总 Airflow、Celery、Paperclip、code-server、new-api（PID、端口、可选 HTTP 探测）
+  status [--no-http]    以表格汇总 Airflow、Celery、Paperclip、code-server、new-api（PID、端口、可选 HTTP 探测）
   install               无参：gum 先选「安装 / 卸载」，再选模块。
   install add <模块>    安装（add 可写 install）
   install remove <模块> 卸载（remove 可写 uninstall；celery/utils 不支持）
@@ -90,9 +90,22 @@ http_probe() {
   fi
 }
 
-section() {
-  echo ""
-  echo "── $* ──"
+# 制表符行 → column -t 对齐（无 column 时原样输出）
+_print_table() {
+  if command -v column >/dev/null 2>&1; then
+    column -t -s $'\t'
+  else
+    cat
+  fi
+}
+
+# 单行五列（服务、状态、PID、端口/访问、HTTP），字段内勿含制表符
+_status_row() {
+  printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5"
+}
+
+_mark_alive() {
+  proc_alive "$1" && printf '%s' '√' || printf '%s' '×'
 }
 
 cmd_status() {
@@ -127,7 +140,7 @@ cmd_status() {
   pid_cel_f="$(read_pid_file "${CELERY_RUN}/flower.pid")"
 
   PAPERCLIP_SERVICE_HOME="${PAPERCLIP_SERVICE_HOME:-${HOME}/opt/paperclip}"
-  PAPERCLIP_PORT="${PAPERCLIP_PORT:-3100}"
+  PAPERCLIP_PORT="${PAPERCLIP_PORT:-8804}"
   pid_pc="$(read_pid_file "${PAPERCLIP_SERVICE_HOME}/run/paperclip.pid")"
 
   CODE_SERVER_SERVICE_HOME="${CODE_SERVER_SERVICE_HOME:-${HOME}/opt/code-server}"
@@ -139,66 +152,62 @@ cmd_status() {
   NEW_API_PORT="${NEW_API_PORT:-3000}"
   pid_na="$(read_pid_file "${NEW_API_SERVICE_HOME}/run/new-api.pid")"
 
-  echo "nltdeploy 服务概览（PID / 端口 / 地址）"
-  echo "时间: $(date '+%Y-%m-%d %H:%M:%S %z')"
+  local ts flower_url cel_wbf cel_pids cel_probe
+  ts="$(date '+%Y-%m-%d %H:%M:%S %z')"
 
-  section "Airflow 3（standalone）"
-  echo "  名称:     Airflow standalone"
-  echo "  安装:     ${AIRFLOW_HOME}"
-  echo "  PID 文件: ${AIRFLOW_PID_FILE}"
-  echo "  进程:     $(status_word "$airflow_pid")  ${airflow_pid:--}"
-  echo "  端口:     ${AIRFLOW_PORT}（环境变量 AIRFLOW__WEBSERVER__WEB_SERVER_PORT）"
-  echo "  地址:     http://127.0.0.1:${AIRFLOW_PORT}/"
-  echo "  探测:     $(http_probe "http://127.0.0.1:${AIRFLOW_PORT}/")"
-  echo "  详情:     nlt-airflow status"
-
-  section "Celery（worker / beat / flower）"
-  echo "  名称:     Celery"
-  echo "  安装:     ${CELERY_HOME}"
-  echo "  提示:     Flower 默认端口与 Airflow Web 相同（8806）；并行部署时请设置 FLOWER_PORT"
-  echo "  worker:   $(status_word "$pid_cel_w")  PID ${pid_cel_w:--}"
-  echo "  beat:     $(status_word "$pid_cel_b")  PID ${pid_cel_b:--}"
-  echo "  flower:   $(status_word "$pid_cel_f")  PID ${pid_cel_f:--}  端口 ${FLOWER_PORT}  监听 ${FLOWER_ADDRESS}"
   if [[ "$FLOWER_ADDRESS" == "0.0.0.0" ]]; then
-    echo "  Flower URL: http://127.0.0.1:${FLOWER_PORT}/"
-    echo "  探测:       $(http_probe "http://127.0.0.1:${FLOWER_PORT}/")"
+    flower_url="http://127.0.0.1:${FLOWER_PORT}/"
   else
-    echo "  Flower URL: http://${FLOWER_ADDRESS}:${FLOWER_PORT}/"
-    echo "  探测:       $(http_probe "http://${FLOWER_ADDRESS}:${FLOWER_PORT}/")"
+    flower_url="http://${FLOWER_ADDRESS}:${FLOWER_PORT}/"
   fi
-  echo "  详情:       nlt-celery status"
+  cel_probe="$(http_probe "$flower_url")"
+  cel_wbf="$(_mark_alive "$pid_cel_w")$(_mark_alive "$pid_cel_b")$(_mark_alive "$pid_cel_f")"
+  cel_pids="${pid_cel_w:--}/${pid_cel_b:--}/${pid_cel_f:--}"
 
-  section "Paperclip"
-  echo "  名称:     Paperclip"
-  echo "  安装:     ${PAPERCLIP_SERVICE_HOME}"
-  echo "  进程:     $(status_word "$pid_pc")  ${pid_pc:--}"
-  echo "  端口:     ${PAPERCLIP_PORT}（PAPERCLIP_PORT）"
-  echo "  健康检查: http://127.0.0.1:${PAPERCLIP_PORT}/api/health"
-  echo "  探测:     $(http_probe "http://127.0.0.1:${PAPERCLIP_PORT}/api/health")"
-  echo "  详情:     nlt-paperclip status"
+  echo "nltdeploy 服务概览（表格）  ${ts}"
+  echo ""
 
-  section "code-server"
-  echo "  名称:     code-server"
-  echo "  安装:     ${CODE_SERVER_SERVICE_HOME}"
-  echo "  进程:     $(status_word "$pid_cs")  ${pid_cs:--}"
-  echo "  绑定:     ${CODE_SERVER_BIND}（CODE_SERVER_BIND）"
-  echo "  探测 URL: http://127.0.0.1:${CODE_SERVER_PORT}/"
-  echo "  探测:     $(http_probe "http://127.0.0.1:${CODE_SERVER_PORT}/")"
-  echo "  详情:     nlt-code-server status"
+  {
+    _status_row "服务" "状态" "PID" "端口/访问" "HTTP"
+    _status_row \
+      "airflow" \
+      "$(status_word "$airflow_pid")" \
+      "${airflow_pid:--}" \
+      "${AIRFLOW_PORT} → 127.0.0.1:${AIRFLOW_PORT}" \
+      "$(http_probe "http://127.0.0.1:${AIRFLOW_PORT}/")"
+    _status_row \
+      "celery" \
+      "wbf ${cel_wbf}" \
+      "${cel_pids}" \
+      "flower ${FLOWER_PORT} (${FLOWER_ADDRESS})" \
+      "${cel_probe}"
+    _status_row \
+      "paperclip" \
+      "$(status_word "$pid_pc")" \
+      "${pid_pc:--}" \
+      "${PAPERCLIP_PORT} /api/health" \
+      "$(http_probe "http://127.0.0.1:${PAPERCLIP_PORT}/api/health")"
+    _status_row \
+      "code-server" \
+      "$(status_word "$pid_cs")" \
+      "${pid_cs:--}" \
+      "${CODE_SERVER_BIND}" \
+      "$(http_probe "http://127.0.0.1:${CODE_SERVER_PORT}/")"
+    _status_row \
+      "new-api" \
+      "$(status_word "$pid_na")" \
+      "${pid_na:--}" \
+      "${NEW_API_PORT} → 127.0.0.1:${NEW_API_PORT}" \
+      "$(http_probe "http://127.0.0.1:${NEW_API_PORT}/")"
+  } | _print_table
 
-  section "new-api"
-  echo "  名称:     new-api（QuantumNous/new-api）"
-  echo "  安装:     ${NEW_API_SERVICE_HOME}"
-  echo "  进程:     $(status_word "$pid_na")  ${pid_na:--}"
-  echo "  端口:     ${NEW_API_PORT}（NEW_API_PORT / PORT）"
-  echo "  地址:     http://127.0.0.1:${NEW_API_PORT}/"
-  echo "  探测:     $(http_probe "http://127.0.0.1:${NEW_API_PORT}/")"
-  echo "  详情:     nlt-new-api status"
-
-  section "工具（无统一守护进程）"
-  echo "  nlt-pip-sources / nlt-python-env / nlt-utils / nlt-github-net"
-  echo "  请使用各命令的 install、status（若有）等子命令单独查看。"
-
+  echo ""
+  echo "说明:"
+  echo "  • celery 状态列 wbf 为 worker / beat / flower：√ 运行中，× 未运行；与 Airflow 同机时请区分 FLOWER_PORT。"
+  echo "  • 安装路径: airflow ${AIRFLOW_HOME} | celery ${CELERY_HOME} | paperclip ${PAPERCLIP_SERVICE_HOME} | code-server ${CODE_SERVER_SERVICE_HOME} | new-api ${NEW_API_SERVICE_HOME}"
+  echo "  • 详情: nlt-airflow / nlt-celery / nlt-paperclip / nlt-code-server / nlt-new-api 各 status"
+  echo ""
+  echo "工具（无统一守护进程）: nlt-pip-sources / nlt-python-env / nlt-utils / nlt-github-net — 请用各命令单独查看。"
   echo ""
 }
 
