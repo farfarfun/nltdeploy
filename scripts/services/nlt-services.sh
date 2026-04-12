@@ -90,18 +90,37 @@ http_probe() {
   fi
 }
 
-# 制表符行 → column -t 对齐（无 column 时原样输出）
-_print_table() {
+# CSV 单元格（RFC 风格双引号，避免内容含逗号时错乱）
+_csv_cell() {
+  local x="${1//\"/\"\"}"
+  printf '"%s"' "$x"
+}
+
+_status_csv_line() {
+  printf '%s,%s,%s,%s,%s\n' \
+    "$(_csv_cell "$1")" "$(_csv_cell "$2")" "$(_csv_cell "$3")" "$(_csv_cell "$4")" "$(_csv_cell "$5")"
+}
+
+# Tab 行 → column -t（无 gum 时的回退）
+_status_tsv_line() {
+  printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5"
+}
+
+# stdin 为 CSV → gum table -p；无 gum 时勿调用本函数，应改送 TSV 给 column
+_render_status_table_from_csv() {
+  PATH="${HOME}/opt/gum/bin:${PATH}"
+  command -v gum >/dev/null 2>&1 || return 1
+  gum table -p -s ',' \
+    --columns '服务,状态,PID,端口/访问,HTTP' \
+    --border rounded
+}
+
+_print_status_rows_column() {
   if command -v column >/dev/null 2>&1; then
     column -t -s $'\t'
   else
     cat
   fi
-}
-
-# 单行五列（服务、状态、PID、端口/访问、HTTP），字段内勿含制表符
-_status_row() {
-  printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5"
 }
 
 _mark_alive() {
