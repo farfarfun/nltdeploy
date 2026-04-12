@@ -4,11 +4,14 @@
 # 用法:
 #   nlt-services                    # gum：status / install / help / quit
 #   nlt-services status [--no-http]
-#   nlt-services install [名称]     # 无参 gum；名称见下方
+#   nlt-services install            # gum：先选「安装 / 卸载」，再选模块
+#   nlt-services install add <名>   # 安装类（install 与 add 同义）
+#   nlt-services install remove <名> # 卸载类（uninstall 与 remove 同义）
 #   nlt-services help
 #
-# install 名称: airflow, celery, paperclip, code-server, new-api,
-#              pip-sources, python-env, utils, github-net
+# 模块名: airflow, celery, paperclip, code-server, new-api,
+#         pip-sources, python-env, utils, github-net
+# 卸载不支持: celery、utils（脚本未提供 uninstall）
 #
 # NONINTERACTIVE=1 且无参数时打印 help 并退出（不进入 gum）。
 
@@ -31,9 +34,9 @@ usage() {
 
 命令:
   status [--no-http]    汇总 Airflow、Celery、Paperclip、code-server、new-api（PID、端口、可选 HTTP 探测）
-  install [名称]        调用对应 nlt-* 安装或交互入口；无参时 gum 选择。
-                        名称: airflow, celery, paperclip, code-server, new-api,
-                              pip-sources, python-env, utils, github-net
+  install               无参：gum 先选「安装 / 卸载」，再选模块。
+  install add <模块>    安装（add 可写 install）
+  install remove <模块> 卸载（remove 可写 uninstall；celery/utils 不支持）
   help / -h / --help    本说明
 
 说明:
@@ -199,28 +202,33 @@ cmd_status() {
   echo ""
 }
 
-cmd_install() {
-  local name="${1:-}"
-  if [[ -z "$name" ]]; then
-    if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
-      die "NONINTERACTIVE=1 时请指定目标，例如: nlt-services install airflow"
-    fi
-    _nlt_ensure_gum || exit 1
-    name="$(gum choose --header "选择安装 / 初始化入口" \
-      "airflow" \
-      "celery" \
-      "paperclip" \
-      "code-server" \
-      "new-api" \
-      "pip-sources" \
-      "python-env" \
-      "utils" \
-      "github-net" \
-      "cancel")" || return 0
-    [[ -z "$name" || "$name" == "cancel" ]] && return 0
-  fi
+# 是否支持 uninstall（上游脚本有该子命令）
+_module_supports_uninstall() {
+  case "$1" in
+    airflow | paperclip | code-server | new-api | pip-sources | python-env | github-net) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+_dispatch_install_or_remove() {
+  local action="$1"
+  local name="$2"
 
   [[ -d "$NLT_BIN" ]] || die "未找到 ${NLT_BIN}，请先执行 install.sh"
+
+  if [[ "$action" == "remove" ]]; then
+    _module_supports_uninstall "$name" || die "模块「${name}」不支持卸载（或请使用各命令自带的 uninstall）"
+    case "$name" in
+      airflow) exec "${NLT_BIN}/nlt-airflow" uninstall ;;
+      paperclip) exec "${NLT_BIN}/nlt-paperclip" uninstall ;;
+      code-server) exec "${NLT_BIN}/nlt-code-server" uninstall ;;
+      new-api) exec "${NLT_BIN}/nlt-new-api" uninstall ;;
+      pip-sources) exec "${NLT_BIN}/nlt-pip-sources" uninstall ;;
+      python-env) exec "${NLT_BIN}/nlt-python-env" uninstall ;;
+      github-net) exec "${NLT_BIN}/nlt-github-net" uninstall ;;
+      *) die "内部错误: remove ${name}" ;;
+    esac
+  fi
 
   case "$name" in
     airflow) exec "${NLT_BIN}/nlt-airflow-install" ;;
@@ -232,8 +240,73 @@ cmd_install() {
     python-env) exec "${NLT_BIN}/nlt-python-env" ;;
     utils) exec "${NLT_BIN}/nlt-utils" ;;
     github-net) exec "${NLT_BIN}/nlt-github-net" ;;
+    *) die "未知模块: ${name}（见 nlt-services help）" ;;
+  esac
+}
+
+cmd_install() {
+  local action="" name=""
+  [[ -d "$NLT_BIN" ]] || die "未找到 ${NLT_BIN}，请先执行 install.sh"
+
+  if [[ $# -eq 0 ]]; then
+    if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
+      die "NONINTERACTIVE=1 时请使用: nlt-services install add|remove <模块>"
+    fi
+    _nlt_ensure_gum || exit 1
+    action="$(gum choose --header "要对模块做什么？" \
+      "安装" \
+      "卸载" \
+      "取消")" || return 0
+    [[ -z "$action" || "$action" == "取消" ]] && return 0
+    case "$action" in
+      安装) action="add" ;;
+      卸载) action="remove" ;;
+      *) return 0 ;;
+    esac
+
+    if [[ "$action" == "add" ]]; then
+      name="$(gum choose --header "选择要安装 / 初始化的模块" \
+        "airflow" "celery" "paperclip" "code-server" "new-api" \
+        "pip-sources" "python-env" "utils" "github-net" "取消")" || return 0
+    else
+      name="$(gum choose --header "选择要卸载的模块（celery、utils 请手动清理）" \
+        "airflow" "paperclip" "code-server" "new-api" \
+        "pip-sources" "python-env" "github-net" "取消")" || return 0
+    fi
+    [[ -z "$name" || "$name" == "取消" ]] && return 0
+    _dispatch_install_or_remove "$action" "$name"
+    return
+  fi
+
+  case "${1:-}" in
+    add | install)
+      shift
+      name="${1:-}"
+      if [[ -z "$name" ]]; then
+        [[ "${NONINTERACTIVE:-}" == "1" ]] && die "请指定模块: nlt-services install add <模块>"
+        _nlt_ensure_gum || exit 1
+        name="$(gum choose --header "选择要安装 / 初始化的模块" \
+          "airflow" "celery" "paperclip" "code-server" "new-api" \
+          "pip-sources" "python-env" "utils" "github-net" "取消")" || return 0
+        [[ -z "$name" || "$name" == "取消" ]] && return 0
+      fi
+      _dispatch_install_or_remove "add" "$name"
+      ;;
+    remove | uninstall)
+      shift
+      name="${1:-}"
+      if [[ -z "$name" ]]; then
+        [[ "${NONINTERACTIVE:-}" == "1" ]] && die "请指定模块: nlt-services install remove <模块>"
+        _nlt_ensure_gum || exit 1
+        name="$(gum choose --header "选择要卸载的模块" \
+          "airflow" "paperclip" "code-server" "new-api" \
+          "pip-sources" "python-env" "github-net" "取消")" || return 0
+        [[ -z "$name" || "$name" == "取消" ]] && return 0
+      fi
+      _dispatch_install_or_remove "remove" "$name"
+      ;;
     *)
-      die "未知 install 目标: ${name}（见 nlt-services help）"
+      die "未知子命令: ${1}（使用: nlt-services install add|remove <模块>）"
       ;;
   esac
 }

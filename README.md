@@ -13,7 +13,7 @@
 - **07-paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，数据目录见上游 `~/.paperclip/…`。
 - **08-code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。
 - **09-new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 3000**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。
-- **10-services**：**`nlt-services`** 总入口——**`status`** 汇总各常驻服务 PID/端口/HTTP 探测；**`install`** 用 gum 或参数选择模块并调用对应 **`nlt-*-install`**（及 pip / python-env / utils / github-net 交互入口）。
+- **10-services**：**`nlt-services`** 总入口——**`status`** 汇总各常驻服务 PID/端口/HTTP 探测；**`install`** 先选 **安装 / 卸载** 再选模块（或 `install add|remove <模块>`）；卸载不含 celery、utils（上游无 uninstall）。
 
 Python 包元数据见根目录 [`pyproject.toml`](pyproject.toml)（MIT）。命令行入口名在元数据中列为 `nltdeploy`，与 `src/` 下模块布局仍在演进；Shell 脚本是当前主力的使用方式。
 
@@ -86,7 +86,7 @@ bash tests/install_smoke.sh
 | `nlt-service-celery` | 同上 `celery-setup.sh`，透传（如 `start-worker` / `start-beat` / `start-flower` / `stop` / `restart` / `status`） |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/05-utils/utils-setup.sh` … |
 | `nlt-github-net` | `scripts/06-github/deploy.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
-| `nlt-services` | `scripts/10-services/services.sh`（无参 gum；`status` / `install [名称]`；status 可加 `--no-http`） |
+| `nlt-services` | `scripts/10-services/services.sh`（无参 gum；`status`；`install` 先选安装或卸载；非交互：`install add <模块>` / `install remove <模块>`；`status --no-http`） |
 | `nlt-paperclip-install` | `scripts/07-paperclip/paperclip-setup.sh` install（git clone + pnpm install） |
 | `nlt-paperclip` | 同上，透传子命令；无参为 gum 菜单 |
 | `nlt-service-paperclip` | 同上 `paperclip-setup.sh`，透传（如 `start` / `stop` / `status` / `update`） |
@@ -255,7 +255,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/06-github/de
 | `07-paperclip` | `paperclip-setup.sh` | 克隆 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)、pnpm 安装与启停 |
 | `08-code-server` | `code-server-setup.sh` | 下载 [coder/code-server](https://github.com/coder/code-server) standalone 包并启停 |
 | `09-new-api` | `new-api-setup.sh` | 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) Release 二进制并启停 |
-| `10-services` | `services.sh` | **`nlt-services`**：`status` 汇总运行与端口；`install` 跳转各模块安装入口 |
+| `10-services` | `services.sh` | **`nlt-services`**：`status`；`install` 安装/卸载分流与各 `nlt-*` 对接 |
 
 子目录中的详细说明：
 
