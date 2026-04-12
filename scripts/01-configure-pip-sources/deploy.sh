@@ -220,7 +220,7 @@ show_help() {
   NONINTERACTIVE=1 $0     # 非交互模式，自动配置
 
 通过 curl 执行:
-  curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/configure-pip-sources.sh | bash
+  curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/configure-pip-sources.sh | bash
 EOF
 }
 

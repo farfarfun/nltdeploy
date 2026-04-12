@@ -68,12 +68,12 @@ NONINTERACTIVE=1 ./deploy.sh
 
 ```bash
 # 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/01-configure-pip-sources/deploy.sh | bash
 # 国内（Gitee，与 GitHub 同步）
 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/01-configure-pip-sources/deploy.sh | bash
 
 # 非交互模式
-NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/scripts/01-configure-pip-sources/deploy.sh | bash
+NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/01-configure-pip-sources/deploy.sh | bash
 NONINTERACTIVE=1 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/01-configure-pip-sources/deploy.sh | bash
 ```
 

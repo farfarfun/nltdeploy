@@ -5,7 +5,7 @@
 _NLT_COMMON_LOADED=1
 
 _nltdeploy_raw_base() {
-  printf '%s\n' "${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/master}}"
+  printf '%s\n' "${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD}}"
 }
 
 _nlt_gum_utils_setup_url() {
