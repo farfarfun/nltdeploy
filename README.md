@@ -49,7 +49,9 @@ curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/master/install.
 - **`NLTDEPLOY_GITEE_REPO`**：默认 `https://gitee.com/farfarfun/nltdeploy.git`
 - **`NLTDEPLOY_SRC_DIR`**：克隆目标目录（默认 `${NLTDEPLOY_ROOT}/src/nltdeploy`）
 
-**配置 PATH：**
+**配置 PATH：** `install.sh` 结束时会向 **`~/.zshrc` / `~/.bashrc`**（按当前 `SHELL` 与已有文件选择，bash 且无 `.bashrc` 时可能写入 **`~/.bash_profile`**）**自动追加**一段带标记的 `export PATH="…/bin:${PATH}"`。**写入前会校验**：若该文件里已有 nltdeploy 标记块，或正文中已出现同一 bin 目录路径，则**跳过**，避免重复。新开终端生效，或手动 `source` 对应 rc 文件。
+
+若需自行配置，等价写法为：
 
 ```bash
 export PATH="$HOME/.local/nltdeploy/bin:$PATH"
@@ -58,7 +60,7 @@ export PATH="$HOME/.local/nltdeploy/bin:$PATH"
 可选环境变量：
 
 - **`NLTDEPLOY_ROOT`**：安装根目录（默认 `~/.local/nltdeploy`）。
-- **`NLTDEPLOY_SKIP_PROFILE_HINT=1`**：安装结束时不打印 PATH 提示（适合 CI）。
+- **`NLTDEPLOY_SKIP_PROFILE_HINT=1`**：不自动写入 shell 配置、不打印上述 PATH 说明（适合 CI；`tests/install_smoke.sh` 已默认设置）。
 - **`NLTDEPLOY_SKIP_GIT_PULL=1`**：不执行 `git pull`，仍按当前工作区/已克隆内容同步 `libexec` 与 `bin`。
 - **`NLTDEPLOY_GITHUB_REPO` / `NLTDEPLOY_GITEE_REPO` / `NLTDEPLOY_SRC_DIR`**：管道安装时的克隆源与目录（见上节）。
 

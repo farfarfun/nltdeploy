@@ -22,7 +22,7 @@ usage() {
 环境变量:
   NLTDEPLOY_ROOT          安装根目录（默认 ~/.local/nltdeploy）
   NLTDEPLOY_SKIP_GIT_PULL 设为 1 时不执行 git pull（仍会做文件同步）
-  NLTDEPLOY_SKIP_PROFILE_HINT 设为 1 时不打印 PATH 提示
+  NLTDEPLOY_SKIP_PROFILE_HINT 设为 1 时不写入 PATH、不打印下方提示（适合 CI）
   NLTDEPLOY_GITHUB_REPO / NLTDEPLOY_GITEE_REPO / NLTDEPLOY_SRC_DIR  见 README
 EOF
 }
@@ -215,10 +215,100 @@ _emit_wrapper nlt-service-new-api-restart new-api/new-api-setup.sh restart
 _emit_wrapper nlt-service-new-api-status new-api/new-api-setup.sh status
 _emit_wrapper nlt-service-new-api-update new-api/new-api-setup.sh update
 
+# 规范路径，便于去重与写入 rc
+_nlt_canonical_bin_dir() {
+  (cd "${NLTDEPLOY_ROOT}/bin" && pwd -P)
+}
+
+# rc 内已有本安装器写入的标记块则视为已配置
+_nlt_rc_has_managed_block() {
+  local f="$1"
+  [[ -f "$f" ]] && grep -Fq '--- nltdeploy PATH' "$f"
+}
+
+# 任意行已把该 bin 目录加入 PATH（简单子串匹配，减少重复 export）
+_nlt_rc_path_mentions_bin() {
+  local f="$1" bin="$2"
+  [[ -f "$f" ]] && grep -qF "${bin}" "$f"
+}
+
+_nlt_append_nlt_path_block() {
+  local rc="$1"
+  local bin="$2"
+  local line marker_top marker_bot
+  line="export PATH=\"${bin}:\${PATH}\""
+  marker_top='# --- nltdeploy PATH (github.com/farfarfun/nltdeploy install.sh) ---'
+  marker_bot='# --- end nltdeploy PATH ---'
+
+  if _nlt_rc_has_managed_block "$rc"; then
+    echo "PATH 已配置（存在 nltdeploy 标记块）: ${rc}" >&2
+    return 0
+  fi
+  if _nlt_rc_path_mentions_bin "$rc" "$bin"; then
+    echo "跳过写入 ${rc}：文件中已出现 ${bin}（请确认 PATH 已包含 nltdeploy bin）" >&2
+    return 0
+  fi
+
+  {
+    echo ""
+    echo "${marker_top}"
+    echo "${line}"
+    echo "${marker_bot}"
+  } >>"$rc"
+  echo "已追加 PATH 到: ${rc}" >&2
+}
+
+# 按 shell / 已有配置文件决定要写入的 rc（去重列表）
+_nlt_collect_profile_targets() {
+  local -a out=()
+  local p t dup
+
+  add_unique() {
+    p="$1"
+    [[ -z "$p" ]] && return
+    for t in "${out[@]:-}"; do
+      [[ "$t" == "$p" ]] && return
+    done
+    out+=("$p")
+  }
+
+  if [[ -f "${HOME}/.zshrc" ]] || [[ "${SHELL:-}" == *zsh* ]]; then
+    add_unique "${HOME}/.zshrc"
+  fi
+  if [[ -f "${HOME}/.bashrc" ]] || [[ "${SHELL:-}" == *bash* ]]; then
+    add_unique "${HOME}/.bashrc"
+  fi
+  if [[ "${SHELL:-}" == *bash* ]] && [[ ! -f "${HOME}/.bashrc" ]] && [[ -f "${HOME}/.bash_profile" ]]; then
+    add_unique "${HOME}/.bash_profile"
+  fi
+  if [[ ${#out[@]} -eq 0 ]]; then
+    add_unique "${HOME}/.zshrc"
+  fi
+
+  for t in "${out[@]}"; do
+    printf '%s\n' "$t"
+  done
+}
+
+_nlt_install_path_to_profiles() {
+  local bin
+  bin="$(_nlt_canonical_bin_dir)" || die "无法解析 ${NLTDEPLOY_ROOT}/bin 为绝对路径"
+  local rc
+  while IFS= read -r rc; do
+    [[ -n "$rc" ]] || continue
+    touch "$rc" 2>/dev/null || {
+      echo "无法写入 ${rc}，跳过。" >&2
+      continue
+    }
+    _nlt_append_nlt_path_block "$rc" "$bin"
+  done < <(_nlt_collect_profile_targets)
+}
+
 if [[ "${NLTDEPLOY_SKIP_PROFILE_HINT:-}" != "1" ]]; then
   echo ""
   echo "已安装到: ${NLTDEPLOY_ROOT}"
-  echo "请将下列行加入 ~/.bashrc / ~/.zshrc（或当前 shell 配置）："
-  echo "  export PATH=\"${NLTDEPLOY_ROOT}/bin:\${PATH}\""
-  echo "若不想看见本提示，可设置 NLTDEPLOY_SKIP_PROFILE_HINT=1"
+  _nlt_install_path_to_profiles
+  echo ""
+  echo "新开终端或执行: source ~/.zshrc   或   source ~/.bashrc"
+  echo "若不想自动写入 shell 配置，可设置 NLTDEPLOY_SKIP_PROFILE_HINT=1"
 fi
