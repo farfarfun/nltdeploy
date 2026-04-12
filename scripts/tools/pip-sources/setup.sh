@@ -5,8 +5,16 @@
 
 set -e  # 遇到错误立即退出
 
-_NLT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)"
-# shellcheck source=../../lib/nlt-common.sh
+_PSDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${_PSDIR}/../lib/nlt-common.sh" ]]; then
+  _NLT_LIB="$(cd "${_PSDIR}/../lib" && pwd)"
+elif [[ -f "${_PSDIR}/../../lib/nlt-common.sh" ]]; then
+  _NLT_LIB="$(cd "${_PSDIR}/../../lib" && pwd)"
+else
+  echo "错误: 找不到 lib/nlt-common.sh（已检查 ${_PSDIR}/../lib 与 ${_PSDIR}/../../lib）" >&2
+  exit 1
+fi
+# shellcheck source=../lib/nlt-common.sh
 source "${_NLT_LIB}/nlt-common.sh"
 
 # 颜色输出

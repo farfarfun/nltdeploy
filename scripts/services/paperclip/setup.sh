@@ -22,8 +22,16 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../../lib/nlt-common.sh
-source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
+if [[ -f "${SCRIPT_DIR}/../lib/nlt-common.sh" ]]; then
+  # shellcheck source=../lib/nlt-common.sh
+  source "${SCRIPT_DIR}/../lib/nlt-common.sh"
+elif [[ -f "${SCRIPT_DIR}/../../lib/nlt-common.sh" ]]; then
+  # shellcheck source=../../lib/nlt-common.sh
+  source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
+else
+  echo "错误: 找不到 lib/nlt-common.sh（已检查 ${SCRIPT_DIR}/../lib 与 ${SCRIPT_DIR}/../../lib）" >&2
+  exit 1
+fi
 
 PAPERCLIP_SERVICE_HOME="${PAPERCLIP_SERVICE_HOME:-${HOME}/opt/paperclip}"
 PAPERCLIP_REPO_URL="${PAPERCLIP_REPO_URL:-https://github.com/paperclipai/paperclip.git}"

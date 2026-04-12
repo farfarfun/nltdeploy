@@ -64,8 +64,16 @@ FAB_AUTH_MANAGER_CLASS="airflow.providers.fab.auth_manager.fab_auth_manager.FabA
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
-# shellcheck source=../../lib/nlt-common.sh
-source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
+if [[ -f "${SCRIPT_DIR}/../lib/nlt-common.sh" ]]; then
+  # shellcheck source=../lib/nlt-common.sh
+  source "${SCRIPT_DIR}/../lib/nlt-common.sh"
+elif [[ -f "${SCRIPT_DIR}/../../lib/nlt-common.sh" ]]; then
+  # shellcheck source=../../lib/nlt-common.sh
+  source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
+else
+  echo "错误: 找不到 lib/nlt-common.sh（已检查 ${SCRIPT_DIR}/../lib 与 ${SCRIPT_DIR}/../../lib）" >&2
+  exit 1
+fi
 
 say_info() {
   gum style --foreground 212 "$*"
