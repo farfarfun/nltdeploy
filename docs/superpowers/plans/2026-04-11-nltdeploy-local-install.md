@@ -141,11 +141,7 @@ _emit_wrapper nlt-python-env python-env/setup.sh
 _emit_wrapper nlt-utils utils/setup.sh
 _emit_wrapper nlt-github-net github-net/setup.sh
 
-_emit_wrapper nlt-airflow-install airflow/setup.sh install
 _emit_wrapper nlt-airflow airflow/setup.sh
-
-_emit_wrapper nlt-celery-install celery/setup.sh install
-_emit_wrapper nlt-celery-update celery/setup.sh update
 _emit_wrapper nlt-celery celery/setup.sh
 ```
 
@@ -237,8 +233,7 @@ export NLTDEPLOY_ROOT="${TMP}/nd"
 bash "${ROOT}/install.sh"
 for f in \
   nlt-pip-sources nlt-python-env nlt-utils nlt-github-net \
-  nlt-airflow-install nlt-airflow \
-  nlt-celery-install nlt-celery-update nlt-celery
+  nlt-airflow nlt-celery
 do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1
@@ -302,7 +297,7 @@ git commit -m "docs: document local install, nlt-* mapping, and NLTDEPLOY_RAW_BA
 | 一键安装 + `bin` 仅 `nlt-*` | Task 1–2 |
 | `libexec` 实现分离 | Task 1 |
 | `nlt-<域>` 单入口透传子命令 | Task 2（Airflow/Celery 等） |
-| `nlt-airflow-install` 非 service | Task 2 |
+| 服务域仅 `nlt-<域>` 单入口（含 `install` 子命令） | Task 2 |
 | `NLTDEPLOY_ROOT` 可覆盖 | Task 1–2 薄包装 |
 | `NONINTERACTIVE` 保留 | 无需改脚本（沿用现有） |
 | `NLTDEPLOY_RAW_BASE` | Task 3 |

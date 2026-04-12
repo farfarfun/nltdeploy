@@ -26,8 +26,7 @@
 | 主形态 | **A：Bash 小命令为主** | 与当前仓库以 shell 为主力一致；Python 包不作为终端主入口（可后续作为可选依赖，本规格不强制）。 |
 | 命令前缀 | **`nlt-`** | 所有 `bin` 内可执行文件名均以此开头。 |
 | 服务生命周期 | **`nlt-<域>`** | 与 **`nlt-airflow`**、**`nlt-celery`**、**`nlt-paperclip`** 等总控入口透传 `start` / `stop` / `status` / `update` 等子命令；**不**再生成 `nlt-service-<域>` 重复包装。 |
-| Airflow「首次安装」 | **`nlt-airflow-install`** | 首次/干净环境安装；日常运维用 **`nlt-airflow`** 接子命令。 |
-| Celery | **`nlt-celery-install`** / **`nlt-celery-update`** / **`nlt-celery`** | 安装、依赖升级与全量子命令（含 worker/beat/flower）分口，与 Airflow 的 install + 总控对称。 |
+| Airflow / Celery 等安装与运维 | **`nlt-airflow`** / **`nlt-celery`** … | 每个域 **单一** `bin` 入口，**透传** `install`、`update`、`start`、`stop` 等子命令；**不**再为 `install`/`update` 单独生成 `nlt-<域>-install` 等并行包装。 |
 | 数据与运行时目录 | **默认保持现有 `~/opt/...` 约定** | 与 README 及现有脚本一致，降低迁移成本；若设置 `AIRFLOW_HOME` / `CELERY_HOME` 等，仍以用户环境为准。后续可在实现阶段增加可选「统一到 `~/.local/nltdeploy/var`」的迁移助手，**不作为本规格 v1 默认行为**。 |
 
 ---
@@ -65,7 +64,7 @@
 | `scripts/tools/python-env/setup.sh` | `nlt-python-env` |
 | `scripts/tools/utils/setup.sh` | `nlt-utils` 或拆分为 `nlt-utils-gum` 等 |
 | `scripts/tools/github-net/setup.sh` | `nlt-github-net` |
-| Airflow 首次安装/升级（原 `scripts/services/airflow/setup.sh` 中非启停部分） | `nlt-airflow-install` |
+| Airflow 首次安装/升级（原 `airflow/setup.sh` 中非启停部分） | `nlt-airflow install`（及域内 `update` 等） |
 
 ### 4.3 服务（进程生命周期）
 
@@ -112,7 +111,7 @@
 ## 8. 测试与验收（规格层）
 
 - 安装脚本在 **macOS 与 Linux**（含无 TTY 的 `NONINTERACTIVE`）下可完成安装。
-- 抽样验收：`nlt-pip-sources`、`nlt-python-env`、`nlt-airflow-install`、`nlt-airflow status`（在未安装服务时可有明确退出码与提示）等按迁移表可调用。
+- 抽样验收：`nlt-pip-sources`、`nlt-python-env`、`nlt-airflow install`、`nlt-airflow status`（在未安装服务时可有明确退出码与提示）等按迁移表可调用。
 
 ---
 
@@ -126,5 +125,5 @@
 ## 规格自检记录
 
 - **占位符**：无 TBD；数据目录默认策略已写死为保留 `~/opt` 与既有 env。
-- **一致性**：服务生命周期统一经 `nlt-<域>`；Airflow / Celery 的首次安装仍用 `nlt-airflow-install`、`nlt-celery-install`，与上文表格一致。
+- **一致性**：服务生命周期与首次安装统一经 **`nlt-<域>`** 及子命令（如 `install`），与上文表格一致；`install.sh` 在更新时会删除历史上曾生成的 `nlt-<域>-install` 等废弃包装。
 - **范围**：本文件仅定义布局与命名；不展开具体 systemd/launchd 或进程管理实现细节（归入实现计划）。

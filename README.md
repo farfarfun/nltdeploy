@@ -10,6 +10,7 @@
 - **celery**：Celery 安装与 worker/beat/flower 启停、状态；默认 `~/opt/celery`。
 - **utils**：安装 **gum**（`~/opt/gum`）与可选 shell 别名（`ll` / `la` / `lla`）。
 - **github-net**：诊断并修复「网页能开但 `git clone` 失败」的常见 HTTPS/SSH 问题。
+- **build**（`nlt-build`）：默认用 **aicommits** 快速提交；子命令对齐开源 **[funbuild / nltbuild](https://github.com/farfarfun/funbuild)**（`pull` / `push` / `upgrade` / `install` / `build` / `release` / `tags` 等，见 `scripts/tools/build/setup.sh` 头注释）。
 - **paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，数据目录见上游 `~/.paperclip/…`。
 - **code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。
 - **new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 3000**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。
@@ -84,20 +85,15 @@ bash tests/install_smoke.sh
 |-------------|---------------------|
 | `nlt-pip-sources` | `scripts/tools/pip-sources/setup.sh`（无参时 gum 选 install/update/reinstall/uninstall） |
 | `nlt-python-env` | `scripts/tools/python-env/setup.sh`（无参时 gum 选子命令；见脚本头） |
-| `nlt-airflow-install` | `scripts/services/airflow/setup.sh` install |
-| `nlt-airflow` | 同上 `setup.sh` 全量子命令（如 `start` / `stop` / `status` / `update`）；无参为 gum 菜单 |
-| `nlt-celery-install` | `scripts/services/celery/setup.sh` install |
-| `nlt-celery-update` | 同上 `setup.sh` update |
-| `nlt-celery` | 同上 `setup.sh` 全量子命令（如 `start-worker` / `stop` / `status`）；无参为菜单 |
+| `nlt-airflow` | `scripts/services/airflow/setup.sh` 全量子命令；`install` 首次/升级安装；`start` / `stop` / `status` / `update` 等；无参为 gum 菜单 |
+| `nlt-celery` | `scripts/services/celery/setup.sh` 全量子命令；`install` / `update`；`start-worker` / `stop` / `status` 等；无参为菜单 |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/tools/utils/setup.sh` … |
 | `nlt-github-net` | `scripts/tools/github-net/setup.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
+| `nlt-build` | `scripts/tools/build/setup.sh` + `nltbuild_core.py`：默认 `aicommits -a`；`commit` / `staged` 同前。子命令 **pull / push / upgrade / install / build / release / tags** 等与 [farfarfun/funbuild](https://github.com/farfarfun/funbuild)（PyPI **nltbuild**）行为对齐；Python 部分需 **python3** 与 **`pip install toml`**；**push** 使用 `aicommits --yes`（与上游 `core.py` 一致）。**clean** / **clean-history** 须设置确认环境变量（见脚本 `help`） |
 | `nlt-services` | `scripts/services/nlt-services.sh`（无参 gum；`status`；`install` 先选安装或卸载；非交互：`install add <模块>` / `install remove <模块>`；`status --no-http`） |
-| `nlt-paperclip-install` | `scripts/services/paperclip/setup.sh` install（git clone + pnpm install） |
-| `nlt-paperclip` | 同上 `setup.sh` 全量子命令；无参为 gum 菜单 |
-| `nlt-code-server-install` | `scripts/services/code-server/setup.sh` install（下载解压官方包） |
-| `nlt-code-server` | 同上 `setup.sh` 全量子命令；无参为 gum 菜单 |
-| `nlt-new-api-install` | `scripts/services/new-api/setup.sh` install（下载 Release 二进制） |
-| `nlt-new-api` | 同上 `setup.sh` 全量子命令；无参为 gum 菜单 |
+| `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install`（git clone + pnpm install）等；无参为 gum 菜单 |
+| `nlt-code-server` | `scripts/services/code-server/setup.sh` 全量子命令；`install`（下载解压官方包）等；无参为 gum 菜单 |
+| `nlt-new-api` | `scripts/services/new-api/setup.sh` 全量子命令；`install` / `update` 下载 Release 二进制；无参为 gum 菜单 |
 
 ## 目录结构
 
@@ -123,8 +119,11 @@ nltdeploy/
 │   │   │   └── README.md
 │   │   ├── utils/
 │   │   │   └── setup.sh                # gum / 别名 / all
-│   │   └── github-net/
-│   │       └── setup.sh                # Git 连通性诊断与修复
+│   │   ├── github-net/
+│   │   │   └── setup.sh                # Git 连通性诊断与修复
+│   │   └── build/
+│   │       ├── setup.sh                # nlt-build：aicommits + nltbuild 移植核心
+│   │       └── nltbuild_core.py        # 构建/版本/发布逻辑（Python）
 │   └── services/                       # 常驻服务与聚合入口
 │       ├── nlt-services.sh             # nlt-services：status + install 聚合入口
 │       ├── airflow/
@@ -253,6 +252,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/github
 | `tools/python-env` | `setup.sh` | uv、多版本 Python venv、基础包 |
 | `tools/utils` | `setup.sh` | gum 与 shell 便利项 |
 | `tools/github-net` | `setup.sh` | GitHub 克隆通道诊断与修复 |
+| `tools/build` | `setup.sh`、`nltbuild_core.py` | `nlt-build`：aicommits 与 funbuild/nltbuild 能力 |
 | `services/airflow` | `setup.sh` | Airflow 3 安装与日常运维封装 |
 | `services/celery` | `setup.sh` | Celery 安装与进程管理 |
 | `services/paperclip` | `setup.sh` | 克隆 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)、pnpm 安装与启停 |

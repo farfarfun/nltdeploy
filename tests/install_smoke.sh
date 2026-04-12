@@ -9,19 +9,23 @@ export NLTDEPLOY_SKIP_GIT_PULL=1
 bash "${ROOT}/install.sh" install
 bash "${ROOT}/install.sh" update
 for f in \
-  nlt-pip-sources nlt-python-env nlt-utils nlt-github-net nlt-services \
-  nlt-airflow-install nlt-airflow \
-  nlt-celery-install nlt-celery-update nlt-celery \
-  nlt-paperclip-install nlt-paperclip \
-  nlt-code-server-install nlt-code-server \
-  nlt-new-api-install nlt-new-api
+  nlt-pip-sources nlt-python-env nlt-utils nlt-github-net nlt-build nlt-services \
+  nlt-airflow nlt-celery nlt-paperclip nlt-code-server nlt-new-api
 do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1
+done
+for bad in \
+  nlt-airflow-install \
+  nlt-celery-install nlt-celery-update \
+  nlt-paperclip-install nlt-code-server-install nlt-new-api-install
+do
+  [[ -e "${NLTDEPLOY_ROOT}/bin/${bad}" ]] && { echo "unexpected deprecated bin/${bad}" >&2; exit 1; }
 done
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/airflow/setup.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/code-server/setup.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/new-api/setup.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/services/nlt-services.sh" || exit 1
+python3 -m py_compile "${NLTDEPLOY_ROOT}/libexec/nltdeploy/build/nltbuild_core.py" || exit 1
 "${NLTDEPLOY_ROOT}/bin/nlt-services" status --no-http >/dev/null || exit 1
 echo "install_smoke OK"

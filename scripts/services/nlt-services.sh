@@ -231,11 +231,11 @@ _dispatch_install_or_remove() {
   fi
 
   case "$name" in
-    airflow) exec "${NLT_BIN}/nlt-airflow-install" ;;
-    celery) exec "${NLT_BIN}/nlt-celery-install" ;;
-    paperclip) exec "${NLT_BIN}/nlt-paperclip-install" ;;
-    code-server) exec "${NLT_BIN}/nlt-code-server-install" ;;
-    new-api) exec "${NLT_BIN}/nlt-new-api-install" ;;
+    airflow) exec "${NLT_BIN}/nlt-airflow" install ;;
+    celery) exec "${NLT_BIN}/nlt-celery" install ;;
+    paperclip) exec "${NLT_BIN}/nlt-paperclip" install ;;
+    code-server) exec "${NLT_BIN}/nlt-code-server" install ;;
+    new-api) exec "${NLT_BIN}/nlt-new-api" install ;;
     pip-sources) exec "${NLT_BIN}/nlt-pip-sources" ;;
     python-env) exec "${NLT_BIN}/nlt-python-env" ;;
     utils) exec "${NLT_BIN}/nlt-utils" ;;
