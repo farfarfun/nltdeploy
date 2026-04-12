@@ -171,49 +171,23 @@ _emit_wrapper nlt-services services/services.sh
 
 _emit_wrapper nlt-airflow-install airflow/deploy.sh install
 _emit_wrapper nlt-airflow airflow/deploy.sh
-
-_emit_wrapper nlt-service-airflow-start airflow/deploy.sh start
-_emit_wrapper nlt-service-airflow-stop airflow/deploy.sh stop
-_emit_wrapper nlt-service-airflow-restart airflow/deploy.sh restart
-_emit_wrapper nlt-service-airflow-status airflow/deploy.sh status
-_emit_wrapper nlt-service-airflow-update airflow/deploy.sh update
+_emit_wrapper nlt-service-airflow airflow/deploy.sh
 
 _emit_wrapper nlt-celery-install celery/celery-setup.sh install
 _emit_wrapper nlt-celery-update celery/celery-setup.sh update
-
-_emit_wrapper nlt-service-celery-worker-start celery/celery-setup.sh start-worker
-_emit_wrapper nlt-service-celery-beat-start celery/celery-setup.sh start-beat
-_emit_wrapper nlt-service-celery-flower-start celery/celery-setup.sh start-flower
-_emit_wrapper nlt-service-celery-stop celery/celery-setup.sh stop
-_emit_wrapper nlt-service-celery-restart celery/celery-setup.sh restart
-_emit_wrapper nlt-service-celery-status celery/celery-setup.sh status
+_emit_wrapper nlt-service-celery celery/celery-setup.sh
 
 _emit_wrapper nlt-paperclip-install paperclip/paperclip-setup.sh install
 _emit_wrapper nlt-paperclip paperclip/paperclip-setup.sh
-
-_emit_wrapper nlt-service-paperclip-start paperclip/paperclip-setup.sh start
-_emit_wrapper nlt-service-paperclip-stop paperclip/paperclip-setup.sh stop
-_emit_wrapper nlt-service-paperclip-restart paperclip/paperclip-setup.sh restart
-_emit_wrapper nlt-service-paperclip-status paperclip/paperclip-setup.sh status
-_emit_wrapper nlt-service-paperclip-update paperclip/paperclip-setup.sh update
+_emit_wrapper nlt-service-paperclip paperclip/paperclip-setup.sh
 
 _emit_wrapper nlt-code-server-install code-server/code-server-setup.sh install
 _emit_wrapper nlt-code-server code-server/code-server-setup.sh
-
-_emit_wrapper nlt-service-code-server-start code-server/code-server-setup.sh start
-_emit_wrapper nlt-service-code-server-stop code-server/code-server-setup.sh stop
-_emit_wrapper nlt-service-code-server-restart code-server/code-server-setup.sh restart
-_emit_wrapper nlt-service-code-server-status code-server/code-server-setup.sh status
-_emit_wrapper nlt-service-code-server-update code-server/code-server-setup.sh update
+_emit_wrapper nlt-service-code-server code-server/code-server-setup.sh
 
 _emit_wrapper nlt-new-api-install new-api/new-api-setup.sh install
 _emit_wrapper nlt-new-api new-api/new-api-setup.sh
-
-_emit_wrapper nlt-service-new-api-start new-api/new-api-setup.sh start
-_emit_wrapper nlt-service-new-api-stop new-api/new-api-setup.sh stop
-_emit_wrapper nlt-service-new-api-restart new-api/new-api-setup.sh restart
-_emit_wrapper nlt-service-new-api-status new-api/new-api-setup.sh status
-_emit_wrapper nlt-service-new-api-update new-api/new-api-setup.sh update
+_emit_wrapper nlt-service-new-api new-api/new-api-setup.sh
 
 # 规范路径，便于去重与写入 rc
 _nlt_canonical_bin_dir() {

@@ -143,20 +143,10 @@ _emit_wrapper nlt-github-net github-net/deploy.sh
 
 _emit_wrapper nlt-airflow-install airflow/deploy.sh install
 _emit_wrapper nlt-airflow airflow/deploy.sh
-
-_emit_wrapper nlt-service-airflow-start airflow/deploy.sh start
-_emit_wrapper nlt-service-airflow-stop airflow/deploy.sh stop
-_emit_wrapper nlt-service-airflow-restart airflow/deploy.sh restart
-_emit_wrapper nlt-service-airflow-status airflow/deploy.sh status
+_emit_wrapper nlt-service-airflow airflow/deploy.sh
 
 _emit_wrapper nlt-celery-install celery/celery-setup.sh install
-
-_emit_wrapper nlt-service-celery-worker-start celery/celery-setup.sh start-worker
-_emit_wrapper nlt-service-celery-beat-start celery/celery-setup.sh start-beat
-_emit_wrapper nlt-service-celery-flower-start celery/celery-setup.sh start-flower
-_emit_wrapper nlt-service-celery-stop celery/celery-setup.sh stop
-_emit_wrapper nlt-service-celery-restart celery/celery-setup.sh restart
-_emit_wrapper nlt-service-celery-status celery/celery-setup.sh status
+_emit_wrapper nlt-service-celery celery/celery-setup.sh
 ```
 
 - [ ] **Step 3: 安装结束提示 PATH（不默认写 profile）**
@@ -247,13 +237,8 @@ export NLTDEPLOY_ROOT="${TMP}/nd"
 bash "${ROOT}/install.sh"
 for f in \
   nlt-pip-sources nlt-python-env nlt-utils nlt-github-net \
-  nlt-airflow-install nlt-airflow \
-  nlt-service-airflow-start nlt-service-airflow-stop \
-  nlt-service-airflow-restart nlt-service-airflow-status \
-  nlt-celery-install \
-  nlt-service-celery-worker-start nlt-service-celery-beat-start \
-  nlt-service-celery-flower-start nlt-service-celery-stop \
-  nlt-service-celery-restart nlt-service-celery-status
+  nlt-airflow-install nlt-airflow nlt-service-airflow \
+  nlt-celery-install nlt-service-celery
 do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1
@@ -316,7 +301,7 @@ git commit -m "docs: document local install, nlt-* mapping, and NLTDEPLOY_RAW_BA
 |----------|----------|
 | 一键安装 + `bin` 仅 `nlt-*` | Task 1–2 |
 | `libexec` 实现分离 | Task 1 |
-| `nlt-service-*` 服务族 | Task 2（Airflow/Celery） |
+| `nlt-service-<域>` 单入口透传子命令 | Task 2（Airflow/Celery 等） |
 | `nlt-airflow-install` 非 service | Task 2 |
 | `NLTDEPLOY_ROOT` 可覆盖 | Task 1–2 薄包装 |
 | `NONINTERACTIVE` 保留 | 无需改脚本（沿用现有） |

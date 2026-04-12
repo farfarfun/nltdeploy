@@ -78,27 +78,22 @@ bash tests/install_smoke.sh
 | `nlt-python-env` | `scripts/02-create-python-env/deploy.sh`（无参时 gum 选子命令；见脚本头） |
 | `nlt-airflow-install` | `scripts/03-airflow/deploy.sh` install |
 | `nlt-airflow`（可接任意子命令；无参为 gum 菜单） | `scripts/03-airflow/deploy.sh` …（含 `update`） |
-| `nlt-service-airflow-start` / `stop` / `restart` / `status` / **`update`** | 同上 `deploy.sh` 对应子命令 |
+| `nlt-service-airflow` | 同上 `deploy.sh`，透传子命令（如 `start` / `stop` / `restart` / `status` / `update`） |
 | `nlt-celery-install` | `scripts/04-celery/celery-setup.sh` install |
 | `nlt-celery-update` | `celery-setup.sh` update |
-| `nlt-service-celery-worker-start` | `celery-setup.sh` start-worker |
-| `nlt-service-celery-beat-start` | `celery-setup.sh` start-beat |
-| `nlt-service-celery-flower-start` | `celery-setup.sh` start-flower |
-| `nlt-service-celery-stop` | `celery-setup.sh` stop |
-| `nlt-service-celery-restart` | `celery-setup.sh` restart |
-| `nlt-service-celery-status` | `celery-setup.sh` status |
+| `nlt-service-celery` | 同上 `celery-setup.sh`，透传（如 `start-worker` / `start-beat` / `start-flower` / `stop` / `restart` / `status`） |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/05-utils/utils-setup.sh` … |
 | `nlt-github-net` | `scripts/06-github/deploy.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
 | `nlt-services` | `scripts/10-services/services.sh`（无参 gum；`status` / `install [名称]`；status 可加 `--no-http`） |
 | `nlt-paperclip-install` | `scripts/07-paperclip/paperclip-setup.sh` install（git clone + pnpm install） |
 | `nlt-paperclip` | 同上，透传子命令；无参为 gum 菜单 |
-| `nlt-service-paperclip-start` / `stop` / `restart` / `status` / `update` | 同上 `paperclip-setup.sh` 对应子命令 |
+| `nlt-service-paperclip` | 同上 `paperclip-setup.sh`，透传（如 `start` / `stop` / `status` / `update`） |
 | `nlt-code-server-install` | `scripts/08-code-server/code-server-setup.sh` install（下载解压官方包） |
 | `nlt-code-server` | 同上，透传子命令；无参为 gum 菜单 |
-| `nlt-service-code-server-start` / `stop` / `restart` / `status` / `update` | 同上 `code-server-setup.sh` 对应子命令 |
+| `nlt-service-code-server` | 同上 `code-server-setup.sh`，透传（如 `start` / `stop` / `status` / `update`） |
 | `nlt-new-api-install` | `scripts/09-new-api/new-api-setup.sh` install（下载 Release 二进制） |
 | `nlt-new-api` | 同上，透传子命令；无参为 gum 菜单 |
-| `nlt-service-new-api-start` / `stop` / `restart` / `status` / `update` | 同上 `new-api-setup.sh` 对应子命令 |
+| `nlt-service-new-api` | 同上 `new-api-setup.sh`，透传（如 `start` / `stop` / `status` / `update`） |
 
 ## 目录结构
 

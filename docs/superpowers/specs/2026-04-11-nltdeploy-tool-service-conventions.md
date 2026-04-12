@@ -59,8 +59,8 @@
 ### 3.2 与 `bin` 命名的关系（不破坏现有安装）
 
 - **推荐**：每个域一个 **总控入口**（如 `nlt-airflow` → `airflow/deploy.sh "$@"`），所有子命令通过参数触发直执行或 gum 菜单。
-- **兼容**：可保留现有 `nlt-service-<域>-<动词>` 薄包装，其实质等价于总控入口加固定前缀参数（如 `nlt-service-airflow-start` → `…/deploy.sh start`）。
-- **新增服务/工具**：优先在 `install.sh` 中增加 **总控** `nlt-<域>`；若动词较多，再按需增加 `nlt-service-*` 别名以方便输入。
+- **服务族命名**：每个长期运行域对应 **一个** **`nlt-service-<域>`**，透传子命令（如 `nlt-service-airflow start`），**不再**为每个动词单独生成 `nlt-service-<域>-<动词>` 文件。
+- **新增服务/工具**：优先 **总控** `nlt-<域>` 与 **`nlt-service-<域>`**（二者可指向同一 libexec 脚本）；安装类入口仍可用 `nlt-<域>-install`。
 
 ---
 
