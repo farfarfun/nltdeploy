@@ -5,11 +5,11 @@
 # 依赖：git、Node.js 20+、pnpm 9+（无 pnpm 时尝试 corepack enable）
 #
 # 用法：
-#   ./paperclip-setup.sh              # gum 菜单
-#   ./paperclip-setup.sh install      # 克隆/拉取源码并 pnpm install
-#   ./paperclip-setup.sh update       # git pull + pnpm install
-#   ./paperclip-setup.sh start        # 后台启动（pnpm paperclipai run）
-#   ./paperclip-setup.sh stop / restart / status
+#   ./setup.sh              # gum 菜单
+#   ./setup.sh install      # 克隆/拉取源码并 pnpm install
+#   ./setup.sh update       # git pull + pnpm install
+#   ./setup.sh start        # 后台启动（pnpm paperclipai run）
+#   ./setup.sh stop / restart / status
 #
 # 环境变量：
 #   PAPERCLIP_SERVICE_HOME   本脚本管理根目录（默认 ~/opt/paperclip）
@@ -22,8 +22,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../_lib/nlt-common.sh
-source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
+# shellcheck source=../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../lib/nlt-common.sh"
 
 PAPERCLIP_SERVICE_HOME="${PAPERCLIP_SERVICE_HOME:-${HOME}/opt/paperclip}"
 PAPERCLIP_REPO_URL="${PAPERCLIP_REPO_URL:-https://github.com/paperclipai/paperclip.git}"
@@ -38,7 +38,7 @@ LOG_FILE="${PAPERCLIP_LOG_DIR}/paperclip.run.log"
 
 usage() {
   cat <<USAGE
-用法: ./paperclip-setup.sh [command [args...]]
+用法: ./setup.sh [command [args...]]
 
   无参数：gum 菜单。
 

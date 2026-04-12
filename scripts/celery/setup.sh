@@ -4,16 +4,16 @@
 # 默认安装路径 ~/opt/celery/（bin、etc、data、log 子目录）。
 #
 # 用法：
-#   chmod +x celery-setup.sh
-#   ./celery-setup.sh              # 无参数：菜单选择或输入命令名
-#   ./celery-setup.sh install
-#   ./celery-setup.sh start       # 二次交互：1=all, 2=worker, 3=beat, 4=flower
-#   ./celery-setup.sh start-worker  # 直接启动（非交互）
-#   ./celery-setup.sh start-beat
-#   ./celery-setup.sh start-flower
-#   ./celery-setup.sh stop
-#   ./celery-setup.sh restart
-#   ./celery-setup.sh status
+#   chmod +x setup.sh
+#   ./setup.sh              # 无参数：菜单选择或输入命令名
+#   ./setup.sh install
+#   ./setup.sh start       # 二次交互：1=all, 2=worker, 3=beat, 4=flower
+#   ./setup.sh start-worker  # 直接启动（非交互）
+#   ./setup.sh start-beat
+#   ./setup.sh start-flower
+#   ./setup.sh stop
+#   ./setup.sh restart
+#   ./setup.sh status
 #
 # 环境变量：
 #   NONINTERACTIVE=1         跳过 gum 确认（如 restart 中是否启动 beat/flower）
@@ -30,13 +30,13 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../_lib/nlt-common.sh
-source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
+# shellcheck source=../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../lib/nlt-common.sh"
 
 usage() {
   cat <<'USAGE'
-用法: ./celery-setup.sh [command [args...]]
-  不传参数时进入菜单交互：输入序号或命令名（提示符 celery-setup> ）。
+用法: ./setup.sh [command [args...]]
+  不传参数时进入菜单交互：输入序号或命令名（提示符 celery> ）。
 
 命令:
   install          创建 venv；安装 celery、redis、flower（可选）；未设 CELERY_APP 时生成 scaffold 示例

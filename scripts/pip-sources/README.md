@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-`deploy.sh` 是一个自动化脚本，用于检测网络连通性并配置常用的 pip 镜像源。脚本会自动测试所有可用的镜像源，按下载速度排序，并生成最优的 `pip.conf` 配置。
+`setup.sh` 是一个自动化脚本，用于检测网络连通性并配置常用的 pip 镜像源。脚本会自动测试所有可用的镜像源，按下载速度排序，并生成最优的 `pip.conf` 配置。
 
 ## 主要特性
 
@@ -45,16 +45,16 @@
 
 ```bash
 # 进入脚本目录
-cd scripts/01-configure-pip-sources
+cd scripts/pip-sources
 
 # 给脚本添加执行权限
-chmod +x deploy.sh
+chmod +x setup.sh
 
 # 运行脚本（交互式）
-./deploy.sh
+./setup.sh
 
 # 非交互模式（自动配置，无需确认）
-NONINTERACTIVE=1 ./deploy.sh
+NONINTERACTIVE=1 ./setup.sh
 ```
 
 ### 命令行参数
@@ -68,13 +68,13 @@ NONINTERACTIVE=1 ./deploy.sh
 
 ```bash
 # 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/01-configure-pip-sources/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/pip-sources/setup.sh | bash
 # 国内（Gitee，与 GitHub 同步）
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/01-configure-pip-sources/deploy.sh | bash
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/pip-sources/setup.sh | bash
 
 # 非交互模式
-NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/01-configure-pip-sources/deploy.sh | bash
-NONINTERACTIVE=1 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/01-configure-pip-sources/deploy.sh | bash
+NONINTERACTIVE=1 curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/pip-sources/setup.sh | bash
+NONINTERACTIVE=1 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/pip-sources/setup.sh | bash
 ```
 
 ## 工作流程

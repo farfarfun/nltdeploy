@@ -18,8 +18,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../_lib/nlt-common.sh
-source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
+# shellcheck source=../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../lib/nlt-common.sh"
 
 NLTDEPLOY_ROOT="${NLTDEPLOY_ROOT:-${HOME}/.local/nltdeploy}"
 NLT_BIN="${NLTDEPLOY_ROOT}/bin"

@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
 # 本机常用 CLI 与 shell 便利项。与 README 一致可通过 curl 管道执行，不经仓库内脚本互引：
-#   curl -LsSf …/utils-setup.sh | bash -s -- gum      # 仅 gum
-#   curl -LsSf …/utils-setup.sh | bash -s -- aliases  # 仅 ll/la/lla 别名
-#   curl -LsSf …/utils-setup.sh | bash -s -- all      # gum + 别名
+#   curl -LsSf …/scripts/utils/setup.sh | bash -s -- gum      # 仅 gum
+#   curl -LsSf …/scripts/utils/setup.sh | bash -s -- aliases  # 仅 ll/la/lla 别名
+#   curl -LsSf …/scripts/utils/setup.sh | bash -s -- all      # gum + 别名
 # 与 .cursor/agents/software-ops.md 一致：gum 安装在 ~/opt/gum/{bin,etc,data,log}。
 #
 # 用法：
-#   ./utils-setup.sh              # 默认：gum（同 gum）
-#   ./utils-setup.sh gum [--force]
-#   ./utils-setup.sh aliases      # 写入 ll / la / lla（已有标记则跳过）
-#   ./utils-setup.sh all [--force]   # gum 再 aliases
-#   GUM_USE_BREW=1 ./utils-setup.sh gum
+#   ./setup.sh              # 默认：gum（同 gum）
+#   ./setup.sh gum [--force]
+#   ./setup.sh aliases      # 写入 ll / la / lla（已有标记则跳过）
+#   ./setup.sh all [--force]   # gum 再 aliases
+#   GUM_USE_BREW=1 ./setup.sh gum
 #
 # 环境变量：
 #   GUM_HOME                     默认 ~/opt/gum
@@ -25,7 +25,7 @@ GUM_HOME="${GUM_HOME:-${HOME}/opt/gum}"
 
 usage() {
   cat <<EOF
-用法: utils-setup.sh [command [选项]]
+用法: setup.sh [command [选项]]
 
 命令:
   gum [--force]    安装 gum 到 ${GUM_HOME}/bin（默认命令）

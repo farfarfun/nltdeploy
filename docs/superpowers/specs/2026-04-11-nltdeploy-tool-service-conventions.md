@@ -58,7 +58,7 @@
 
 ### 3.2 与 `bin` 命名的关系（不破坏现有安装）
 
-- **推荐**：每个域一个 **总控入口**（如 `nlt-airflow` → `airflow/deploy.sh "$@"`），所有子命令通过参数触发直执行或 gum 菜单。
+- **推荐**：每个域一个 **总控入口**（如 `nlt-airflow` → `airflow/setup.sh "$@"`），所有子命令通过参数触发直执行或 gum 菜单。
 - **服务族命名**：每个长期运行域对应 **一个** **`nlt-service-<域>`**，透传子命令（如 `nlt-service-airflow start`），**不再**为每个动词单独生成 `nlt-service-<域>-<动词>` 文件。
 - **新增服务/工具**：优先 **总控** `nlt-<域>` 与 **`nlt-service-<域>`**（二者可指向同一 libexec 脚本）；安装类入口仍可用 `nlt-<域>-install`。
 
@@ -74,7 +74,7 @@
 ### 4.2 `_nlt_ensure_gum` 行为约定
 
 1. **若已可用**：`command -v gum` 成功，或约定路径下已有可执行文件（与现有 `~/opt/gum/bin` 策略一致），则 **立即返回 0**，不得重复下载或重复安装。
-2. **若不可用**：调用与本仓库一致的 gum 安装方式（例如通过 `NLTDEPLOY_RAW_BASE` / `nltdeploy_RAW_BASE` 拉取 `utils-setup.sh` 并执行 `bash -s -- gum`，或 libexec 内已复制的 `utils-setup.sh`），执行后再次保证 `PATH` 含 gum。
+2. **若不可用**：调用与本仓库一致的 gum 安装方式（例如通过 `NLTDEPLOY_RAW_BASE` / `nltdeploy_RAW_BASE` 拉取 `scripts/utils/setup.sh` 并执行 `bash -s -- gum`，或 libexec 内已复制的 `utils/setup.sh`），执行后再次保证 `PATH` 含 gum。
 3. **gum 安装过程本身** 不使用 gum 做交互（与用户要求「gum 安装除外」一致）；该过程可使用 `NONINTERACTIVE`、环境变量或自带的最小提示。
 
 ### 4.3 交互范围
@@ -86,12 +86,12 @@
 
 ## 5. 实现结构建议（libexec / scripts）
 
-- 每个域一个主脚本（如 `airflow/deploy.sh`），内部结构建议为：
+- 每个域一个主脚本（如 `airflow/setup.sh`），内部结构建议为：
   - `usage` / `help`
   - `_nlt_ensure_gum`（或 `source` 公共片段）
   - `cmd_install` / `cmd_update` / `cmd_start` …
   - `main "$@"`：`case`/`if` 分发子命令
-- **公共逻辑**：`_nlt_ensure_gum` 已落在仓库 **`scripts/_lib/nlt-common.sh`**（安装后同步到 `libexec/nltdeploy/_lib/`），各域脚本 `source` 该文件；统一样式输出仍可按域保留（如 `gum style`）。
+- **公共逻辑**：`_nlt_ensure_gum` 已落在仓库 **`scripts/lib/nlt-common.sh`**（安装后同步到 `libexec/nltdeploy/lib/`），各域脚本 `source` 该文件；统一样式输出仍可按域保留（如 `gum style`）。
 
 ---
 
@@ -108,7 +108,7 @@
 
 ## 7. 与现状的差异（迁移说明）
 
-已实现（持续迭代中）：Airflow 增加 **`update`** 并统一 **`_nlt_ensure_gum`**；Celery 增加 **`update`**、无参 **gum** 菜单及 **`NONINTERACTIVE`** 下的 restart 行为；pip / Python 环境 / GitHub 网络工具补齐 **install / update / reinstall / uninstall** 形态与无参 gum 入口（`05-utils` 仍以安装 gum 为主，未强制四字命令）。若某域仍有 read 交互，可逐步改为 gum。
+已实现（持续迭代中）：Airflow 增加 **`update`** 并统一 **`_nlt_ensure_gum`**；Celery 增加 **`update`**、无参 **gum** 菜单及 **`NONINTERACTIVE`** 下的 restart 行为；pip / Python 环境 / GitHub 网络工具补齐 **install / update / reinstall / uninstall** 形态与无参 gum 入口（`utils` 仍以安装 gum 为主，未强制四字命令）。若某域仍有 read 交互，可逐步改为 gum。
 
 ---
 
@@ -117,4 +117,4 @@
 | 日期 | 说明 |
 |------|------|
 | 2026-04-11 | 首版：工具/服务必选子命令、gum 策略、参数直执行与 bin 命名关系。 |
-| 2026-04-11 | 补充：`scripts/_lib/nlt-common.sh`；Airflow/Celery/GitHub/pip/Python-env 按规范首轮改造说明。 |
+| 2026-04-11 | 补充：`scripts/lib/nlt-common.sh`；Airflow/Celery/GitHub/pip/Python-env 按规范首轮改造说明。 |

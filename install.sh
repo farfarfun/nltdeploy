@@ -240,66 +240,66 @@ do_install_or_update() {
     "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net" \
     "${LIBEXEC}/paperclip" "${LIBEXEC}/code-server" "${LIBEXEC}/new-api" \
     "${LIBEXEC}/services" \
-    "${LIBEXEC}/_lib"
+    "${LIBEXEC}/lib"
 
-  cp -f "${SCRIPTS}/_lib/nlt-common.sh" "${LIBEXEC}/_lib/nlt-common.sh"
-  chmod 0755 "${LIBEXEC}/_lib/nlt-common.sh"
+  cp -f "${SCRIPTS}/lib/nlt-common.sh" "${LIBEXEC}/lib/nlt-common.sh"
+  chmod 0755 "${LIBEXEC}/lib/nlt-common.sh"
 
-  cp -f "${SCRIPTS}/01-configure-pip-sources/deploy.sh" "${LIBEXEC}/pip-sources/deploy.sh"
-  chmod 0755 "${LIBEXEC}/pip-sources/deploy.sh"
+  cp -f "${SCRIPTS}/pip-sources/setup.sh" "${LIBEXEC}/pip-sources/setup.sh"
+  chmod 0755 "${LIBEXEC}/pip-sources/setup.sh"
 
-  cp -f "${SCRIPTS}/02-create-python-env/deploy.sh" "${LIBEXEC}/python-env/deploy.sh"
-  chmod 0755 "${LIBEXEC}/python-env/deploy.sh"
+  cp -f "${SCRIPTS}/python-env/setup.sh" "${LIBEXEC}/python-env/setup.sh"
+  chmod 0755 "${LIBEXEC}/python-env/setup.sh"
 
-  cp -f "${SCRIPTS}/03-airflow/deploy.sh" "${LIBEXEC}/airflow/deploy.sh"
-  chmod 0755 "${LIBEXEC}/airflow/deploy.sh"
+  cp -f "${SCRIPTS}/airflow/setup.sh" "${LIBEXEC}/airflow/setup.sh"
+  chmod 0755 "${LIBEXEC}/airflow/setup.sh"
 
-  cp -f "${SCRIPTS}/04-celery/celery-setup.sh" "${LIBEXEC}/celery/celery-setup.sh"
-  chmod 0755 "${LIBEXEC}/celery/celery-setup.sh"
+  cp -f "${SCRIPTS}/celery/setup.sh" "${LIBEXEC}/celery/setup.sh"
+  chmod 0755 "${LIBEXEC}/celery/setup.sh"
 
-  cp -f "${SCRIPTS}/05-utils/utils-setup.sh" "${LIBEXEC}/utils/utils-setup.sh"
-  chmod 0755 "${LIBEXEC}/utils/utils-setup.sh"
+  cp -f "${SCRIPTS}/utils/setup.sh" "${LIBEXEC}/utils/setup.sh"
+  chmod 0755 "${LIBEXEC}/utils/setup.sh"
 
-  cp -f "${SCRIPTS}/06-github/deploy.sh" "${LIBEXEC}/github-net/deploy.sh"
-  chmod 0755 "${LIBEXEC}/github-net/deploy.sh"
+  cp -f "${SCRIPTS}/github-net/setup.sh" "${LIBEXEC}/github-net/setup.sh"
+  chmod 0755 "${LIBEXEC}/github-net/setup.sh"
 
-  cp -f "${SCRIPTS}/07-paperclip/paperclip-setup.sh" "${LIBEXEC}/paperclip/paperclip-setup.sh"
-  chmod 0755 "${LIBEXEC}/paperclip/paperclip-setup.sh"
+  cp -f "${SCRIPTS}/paperclip/setup.sh" "${LIBEXEC}/paperclip/setup.sh"
+  chmod 0755 "${LIBEXEC}/paperclip/setup.sh"
 
-  cp -f "${SCRIPTS}/08-code-server/code-server-setup.sh" "${LIBEXEC}/code-server/code-server-setup.sh"
-  chmod 0755 "${LIBEXEC}/code-server/code-server-setup.sh"
+  cp -f "${SCRIPTS}/code-server/setup.sh" "${LIBEXEC}/code-server/setup.sh"
+  chmod 0755 "${LIBEXEC}/code-server/setup.sh"
 
-  cp -f "${SCRIPTS}/09-new-api/new-api-setup.sh" "${LIBEXEC}/new-api/new-api-setup.sh"
-  chmod 0755 "${LIBEXEC}/new-api/new-api-setup.sh"
+  cp -f "${SCRIPTS}/new-api/setup.sh" "${LIBEXEC}/new-api/setup.sh"
+  chmod 0755 "${LIBEXEC}/new-api/setup.sh"
 
-  cp -f "${SCRIPTS}/10-services/services.sh" "${LIBEXEC}/services/services.sh"
-  chmod 0755 "${LIBEXEC}/services/services.sh"
+  cp -f "${SCRIPTS}/services/nlt-services.sh" "${LIBEXEC}/services/nlt-services.sh"
+  chmod 0755 "${LIBEXEC}/services/nlt-services.sh"
 
-  _emit_wrapper nlt-pip-sources pip-sources/deploy.sh
-  _emit_wrapper nlt-python-env python-env/deploy.sh
-  _emit_wrapper nlt-utils utils/utils-setup.sh
-  _emit_wrapper nlt-github-net github-net/deploy.sh
-  _emit_wrapper nlt-services services/services.sh
+  _emit_wrapper nlt-pip-sources pip-sources/setup.sh
+  _emit_wrapper nlt-python-env python-env/setup.sh
+  _emit_wrapper nlt-utils utils/setup.sh
+  _emit_wrapper nlt-github-net github-net/setup.sh
+  _emit_wrapper nlt-services services/nlt-services.sh
 
-  _emit_wrapper nlt-airflow-install airflow/deploy.sh install
-  _emit_wrapper nlt-airflow airflow/deploy.sh
-  _emit_wrapper nlt-service-airflow airflow/deploy.sh
+  _emit_wrapper nlt-airflow-install airflow/setup.sh install
+  _emit_wrapper nlt-airflow airflow/setup.sh
+  _emit_wrapper nlt-service-airflow airflow/setup.sh
 
-  _emit_wrapper nlt-celery-install celery/celery-setup.sh install
-  _emit_wrapper nlt-celery-update celery/celery-setup.sh update
-  _emit_wrapper nlt-service-celery celery/celery-setup.sh
+  _emit_wrapper nlt-celery-install celery/setup.sh install
+  _emit_wrapper nlt-celery-update celery/setup.sh update
+  _emit_wrapper nlt-service-celery celery/setup.sh
 
-  _emit_wrapper nlt-paperclip-install paperclip/paperclip-setup.sh install
-  _emit_wrapper nlt-paperclip paperclip/paperclip-setup.sh
-  _emit_wrapper nlt-service-paperclip paperclip/paperclip-setup.sh
+  _emit_wrapper nlt-paperclip-install paperclip/setup.sh install
+  _emit_wrapper nlt-paperclip paperclip/setup.sh
+  _emit_wrapper nlt-service-paperclip paperclip/setup.sh
 
-  _emit_wrapper nlt-code-server-install code-server/code-server-setup.sh install
-  _emit_wrapper nlt-code-server code-server/code-server-setup.sh
-  _emit_wrapper nlt-service-code-server code-server/code-server-setup.sh
+  _emit_wrapper nlt-code-server-install code-server/setup.sh install
+  _emit_wrapper nlt-code-server code-server/setup.sh
+  _emit_wrapper nlt-service-code-server code-server/setup.sh
 
-  _emit_wrapper nlt-new-api-install new-api/new-api-setup.sh install
-  _emit_wrapper nlt-new-api new-api/new-api-setup.sh
-  _emit_wrapper nlt-service-new-api new-api/new-api-setup.sh
+  _emit_wrapper nlt-new-api-install new-api/setup.sh install
+  _emit_wrapper nlt-new-api new-api/setup.sh
+  _emit_wrapper nlt-service-new-api new-api/setup.sh
 
   if [[ "${NLTDEPLOY_SKIP_PROFILE_HINT:-}" != "1" ]]; then
     echo ""

@@ -60,11 +60,11 @@
 
 | 现有入口 | 目标命令（示例） |
 |----------|------------------|
-| `01-configure-pip-sources/deploy.sh` | `nlt-pip-sources` |
-| `02-create-python-env/deploy.sh` | `nlt-python-env` |
-| `05-utils/utils-setup.sh` | `nlt-utils` 或拆分为 `nlt-utils-gum` 等 |
-| `06-github/deploy.sh` | `nlt-github-net` |
-| Airflow 首次安装/升级（原 `03-airflow/deploy.sh` 中非启停部分） | `nlt-airflow-install` |
+| `pip-sources/setup.sh` | `nlt-pip-sources` |
+| `python-env/setup.sh` | `nlt-python-env` |
+| `utils/setup.sh` | `nlt-utils` 或拆分为 `nlt-utils-gum` 等 |
+| `github-net/setup.sh` | `nlt-github-net` |
+| Airflow 首次安装/升级（原 `airflow/setup.sh` 中非启停部分） | `nlt-airflow-install` |
 
 ### 4.3 服务（进程生命周期）
 

@@ -4,11 +4,11 @@
 # 依赖：curl；可选 python3（用于在「latest 无资源包」时挑选最近一条带二进制附件的 Release）。
 #
 # 用法：
-#   ./new-api-setup.sh              # gum 菜单
-#   ./new-api-setup.sh install      # 下载二进制到 ${NEW_API_SERVICE_HOME}/bin/new-api
-#   ./new-api-setup.sh update       # 重新下载（同 install）
-#   ./new-api-setup.sh start        # 后台启动（工作目录为数据目录，默认端口 3000）
-#   ./new-api-setup.sh stop | restart | status | uninstall
+#   ./setup.sh              # gum 菜单
+#   ./setup.sh install      # 下载二进制到 ${NEW_API_SERVICE_HOME}/bin/new-api
+#   ./setup.sh update       # 重新下载（同 install）
+#   ./setup.sh start        # 后台启动（工作目录为数据目录，默认端口 3000）
+#   ./setup.sh stop | restart | status | uninstall
 #
 # 环境变量：
 #   NEW_API_SERVICE_HOME   安装根（默认 ~/opt/new-api），内含 bin/new-api、data/（SQLite 等工作目录）
@@ -22,8 +22,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../_lib/nlt-common.sh
-source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
+# shellcheck source=../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../lib/nlt-common.sh"
 
 NEW_API_GITHUB_REPO="${NEW_API_GITHUB_REPO:-QuantumNous/new-api}"
 NEW_API_SERVICE_HOME="${NEW_API_SERVICE_HOME:-${HOME}/opt/new-api}"
@@ -41,7 +41,7 @@ NEW_API_FALLBACK_TAG="${NEW_API_FALLBACK_TAG:-v0.12.6}"
 
 usage() {
   cat <<USAGE
-用法: ./new-api-setup.sh [command]
+用法: ./setup.sh [command]
 
   无参数：gum 菜单。
 

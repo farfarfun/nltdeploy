@@ -2,7 +2,7 @@
 # 本机 Apache Airflow 3.x：安装、启停、DAG 脚手架与常用 CLI 封装（仅 3.x，不兼容 2.x）。
 # 与脚本所在仓库/业务无关，可置于任意目录单独使用。
 # 约定与 .cursor/agents/software-ops.md 对齐：默认 AIRFLOW_HOME=~/opt/airflow，并创建 {bin,etc,data,log}；
-# 依赖 gum：缺省时按 README 同款「curl -LsSf <utils-setup.sh> | bash」安装（不经本地路径调用其它脚本）。
+# 依赖 gum：缺省时按 README 同款「curl -LsSf <…/scripts/utils/setup.sh> | bash」安装（不经本地路径调用其它脚本）。
 # 默认将 AIRFLOW_HOME 固定为 ~/opt/airflow（不再支持改到其它目录）。
 # install 会安装核心 + apache-airflow-providers-fab（FAB），并执行 airflow fab-db migrate。
 #
@@ -64,8 +64,8 @@ FAB_AUTH_MANAGER_CLASS="airflow.providers.fab.auth_manager.fab_auth_manager.FabA
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 
-# shellcheck source=../_lib/nlt-common.sh
-source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
+# shellcheck source=../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../lib/nlt-common.sh"
 
 say_info() {
   gum style --foreground 212 "$*"
@@ -87,7 +87,7 @@ confirm_yes() {
 usage() {
   cat <<EOF
 用法: ./${SCRIPT_NAME} [command [args...]]
-  不传参数时进入 gum 列表菜单。若无 gum，将按 README 用 curl 拉取 utils-setup.sh 安装。
+  不传参数时进入 gum 列表菜单。若无 gum，将按 README 用 curl 拉取 scripts/utils/setup.sh 安装。
 
 命令:
   install          在 ~/opt/airflow/venv 用 uv 创建/复用环境；按官方 constraints 安装 Airflow 核心 + FAB；db migrate + fab-db migrate

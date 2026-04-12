@@ -2,7 +2,7 @@
 
 ## 功能概述
 
-`deploy.sh` 是一个自动化脚本，用于使用 `uv` 创建 Python 虚拟环境并安装基础包。脚本支持多个 Python 版本，提供交互式选择界面，并自动处理环境创建和包安装。
+`setup.sh` 是一个自动化脚本，用于使用 `uv` 创建 Python 虚拟环境并安装基础包。脚本支持多个 Python 版本，提供交互式选择界面，并自动处理环境创建和包安装。
 
 ## 主要特性
 
@@ -32,16 +32,16 @@
 
 ```bash
 # 进入脚本目录
-cd scripts/02-create-python-env
+cd scripts/python-env
 
 # 给脚本添加执行权限
-chmod +x deploy.sh
+chmod +x setup.sh
 
 # 方式一：直接执行（推荐用于首次安装）
-./deploy.sh
+./setup.sh
 
 # 方式二：使用 source 执行（推荐，可自动激活环境）
-source ./deploy.sh
+source ./setup.sh
 ```
 
 ### 命令行参数
@@ -57,41 +57,41 @@ source ./deploy.sh
 
 ```bash
 # 指定 Python 版本（跳过交互式选择）
-./deploy.sh -v 3.12
+./setup.sh -v 3.12
 
 # 指定版本并强制重新创建环境
-./deploy.sh --version 3.11 --force
+./setup.sh --version 3.11 --force
 
 # 指定版本并安装额外的包
-./deploy.sh -v 3.12 -p requests
-./deploy.sh -v 3.12 -p numpy -p pandas -p matplotlib
+./setup.sh -v 3.12 -p requests
+./setup.sh -v 3.12 -p numpy -p pandas -p matplotlib
 
 # 只安装额外的包（使用默认版本）
-./deploy.sh -p requests -p flask
+./setup.sh -p requests -p flask
 
 # 非交互模式（使用默认版本）
-NONINTERACTIVE=1 ./deploy.sh
+NONINTERACTIVE=1 ./setup.sh
 ```
 
 ### 通过 curl 执行
 
 ```bash
 # 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/02-create-python-env/deploy.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash
 # 国内（Gitee，与 GitHub 同步）
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash
 
 # 指定版本（跳过交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash -s -- -v 3.12
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash -s -- -v 3.12
 
 # 指定版本并强制重新创建
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.11 -f
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.11 -f
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash -s -- -v 3.11 -f
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash -s -- -v 3.11 -f
 
 # 指定版本并安装额外的包
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-python-env/deploy.sh | bash -s -- -v 3.12 -p requests -p flask
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash -s -- -v 3.12 -p requests -p flask
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash -s -- -v 3.12 -p requests -p flask
 ```
 
 ## 工作流程
@@ -123,8 +123,8 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-py
 7. **显示环境信息**：显示环境路径和已安装的包列表
 
 8. **自动激活环境**：脚本执行完成后，会自动尝试激活选中的环境
-   - 如果通过 `source ./deploy.sh` 执行，环境会在当前 shell 中自动激活
-   - 如果直接执行 `./deploy.sh`，会提示如何手动激活环境
+   - 如果通过 `source ./setup.sh` 执行，环境会在当前 shell 中自动激活
+   - 如果直接执行 `./setup.sh`，会提示如何手动激活环境
 
 ## 版本选择示例
 
@@ -171,7 +171,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/02-create-py
 
 ### 激活环境
 
-**自动激活**：如果使用 `source ./deploy.sh` 执行脚本，环境会在脚本完成后自动激活，无需手动激活。
+**自动激活**：如果使用 `source ./setup.sh` 执行脚本，环境会在脚本完成后自动激活，无需手动激活。
 
 **手动激活**：
 
@@ -258,7 +258,7 @@ uv pip list
 **解决方案**：
 1. 检查网络连接
 2. 验证包名是否正确
-3. **建议先运行 pip 源配置脚本**：`../01-configure-pip-sources/deploy.sh`
+3. **建议先运行 pip 源配置脚本**：`../pip-sources/setup.sh`
 4. 尝试手动安装：`uv pip install package_name`
 
 ### 问题：权限错误
@@ -311,21 +311,21 @@ rm -rf ~/opt/py311
 1. **首次使用**：
    ```bash
    # 1. 先配置 pip 源（提高后续安装速度）
-   cd ../01-configure-pip-sources
-   ./deploy.sh
+   cd ../pip-sources
+   ./setup.sh
    
    # 2. 创建 Python 环境
-   cd ../02-create-python-env
-   ./deploy.sh
+   cd ../python-env
+   ./setup.sh
    ```
 
 2. **后续使用**：
-   - 如果需要创建新的 Python 版本环境，直接运行 `./deploy.sh`
-   - 如果需要在现有环境中安装包，运行 `./deploy.sh -p package_name`
+   - 如果需要创建新的 Python 版本环境，直接运行 `./setup.sh`
+   - 如果需要在现有环境中安装包，运行 `./setup.sh -p package_name`
 
 ## 相关链接
 
 - [uv 官方文档](https://github.com/astral-sh/uv)
 - [Python 虚拟环境文档](https://docs.python.org/3/tutorial/venv.html)
-- [pip 源配置脚本](../01-configure-pip-sources/readme.md)
+- [pip 源配置脚本](../pip-sources/README.md)
 - [项目主 README](../../README.md)

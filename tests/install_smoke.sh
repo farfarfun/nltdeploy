@@ -19,9 +19,9 @@ do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1
 done
-bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/airflow/deploy.sh" || exit 1
-bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/code-server/code-server-setup.sh" || exit 1
-bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/new-api/new-api-setup.sh" || exit 1
-bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/services/services.sh" || exit 1
+bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/airflow/setup.sh" || exit 1
+bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/code-server/setup.sh" || exit 1
+bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/new-api/setup.sh" || exit 1
+bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/services/nlt-services.sh" || exit 1
 "${NLTDEPLOY_ROOT}/bin/nlt-services" status --no-http >/dev/null || exit 1
 echo "install_smoke OK"

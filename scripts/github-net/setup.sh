@@ -2,11 +2,11 @@
 # 修复「GitHub 网页能访问，但 git clone 失败」的常见网络问题。
 #
 # 用法：
-#   ./deploy.sh                  # 无参：gum 交互诊断 + 选择修复
-#   ./deploy.sh install          # 自动诊断并应用推荐修复（同 fix_auto）
-#   ./deploy.sh update           # 仅诊断
-#   ./deploy.sh reinstall        # 再次自动修复（交互确认）
-#   ./deploy.sh uninstall        # 提示如何撤销本脚本写入的 SSH/Git 片段
+#   ./setup.sh                  # 无参：gum 交互诊断 + 选择修复
+#   ./setup.sh install          # 自动诊断并应用推荐修复（同 fix_auto）
+#   ./setup.sh update           # 仅诊断
+#   ./setup.sh reinstall        # 再次自动修复（交互确认）
+#   ./setup.sh uninstall        # 提示如何撤销本脚本写入的 SSH/Git 片段
 #   NONINTERACTIVE=1             # 跳过 gum 确认（install/reinstall 直接执行）
 #
 # 自动处理流程（已固化到脚本）：
@@ -18,8 +18,8 @@
 set -euo pipefail
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../_lib/nlt-common.sh
-source "${_SCRIPT_DIR}/../_lib/nlt-common.sh"
+# shellcheck source=../lib/nlt-common.sh
+source "${_SCRIPT_DIR}/../lib/nlt-common.sh"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 SSH_CONFIG_PATH="${HOME}/.ssh/config"

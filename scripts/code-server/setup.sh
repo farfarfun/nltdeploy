@@ -4,11 +4,11 @@
 # 依赖：curl、tar；无需单独安装 Node（发行包已内置）。
 #
 # 用法：
-#   ./code-server-setup.sh              # gum 菜单
-#   ./code-server-setup.sh install      # 下载并解压到 ${CODE_SERVER_SERVICE_HOME}
-#   ./code-server-setup.sh update       # 重新下载安装（同 install）
-#   ./code-server-setup.sh start        # 后台 code-server --bind-addr …
-#   ./code-server-setup.sh stop | restart | status | uninstall
+#   ./setup.sh              # gum 菜单
+#   ./setup.sh install      # 下载并解压到 ${CODE_SERVER_SERVICE_HOME}
+#   ./setup.sh update       # 重新下载安装（同 install）
+#   ./setup.sh start        # 后台 code-server --bind-addr …
+#   ./setup.sh stop | restart | status | uninstall
 #
 # 环境变量：
 #   CODE_SERVER_SERVICE_HOME  安装根（默认 ~/opt/code-server），内含 bin/code-server
@@ -21,8 +21,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../_lib/nlt-common.sh
-source "${SCRIPT_DIR}/../_lib/nlt-common.sh"
+# shellcheck source=../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../lib/nlt-common.sh"
 
 CODE_SERVER_SERVICE_HOME="${CODE_SERVER_SERVICE_HOME:-${HOME}/opt/code-server}"
 CODE_SERVER_BIND="${CODE_SERVER_BIND:-127.0.0.1:8080}"
@@ -37,7 +37,7 @@ CODE_SERVER_BIN="${CODE_SERVER_SERVICE_HOME}/bin/code-server"
 
 usage() {
   cat <<USAGE
-用法: ./code-server-setup.sh [command]
+用法: ./setup.sh [command]
 
   无参数：gum 菜单。
 
