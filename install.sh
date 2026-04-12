@@ -95,7 +95,7 @@ _nlt_canonical_bin_dir() {
 
 _nlt_rc_has_managed_block() {
   local f="$1"
-  [[ -f "$f" ]] && grep -Fq '--- nltdeploy PATH' "$f"
+  [[ -f "$f" ]] && grep -Fq -- '--- nltdeploy PATH' "$f"
 }
 
 _nlt_rc_path_mentions_bin() {
@@ -177,7 +177,7 @@ _nlt_install_path_to_profiles() {
 _remove_managed_path_block_from_file() {
   local f="$1"
   [[ -f "$f" ]] || return 0
-  grep -Fq '--- nltdeploy PATH' "$f" || return 0
+  grep -Fq -- '--- nltdeploy PATH' "$f" || return 0
   local start end tmp
   start="$(grep -nF '# --- nltdeploy PATH (github.com/farfarfun/nltdeploy install.sh) ---' "$f" | head -1 | cut -d: -f1)"
   end="$(grep -nF '# --- end nltdeploy PATH ---' "$f" | head -1 | cut -d: -f1)"
