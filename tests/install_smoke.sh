@@ -10,11 +10,11 @@ bash "${ROOT}/install.sh" install
 bash "${ROOT}/install.sh" update
 for f in \
   nlt-pip-sources nlt-python-env nlt-utils nlt-github-net nlt-services \
-  nlt-airflow-install nlt-airflow nlt-service-airflow \
-  nlt-celery-install nlt-celery-update nlt-service-celery \
-  nlt-paperclip-install nlt-paperclip nlt-service-paperclip \
-  nlt-code-server-install nlt-code-server nlt-service-code-server \
-  nlt-new-api-install nlt-new-api nlt-service-new-api
+  nlt-airflow-install nlt-airflow \
+  nlt-celery-install nlt-celery-update nlt-celery \
+  nlt-paperclip-install nlt-paperclip \
+  nlt-code-server-install nlt-code-server \
+  nlt-new-api-install nlt-new-api
 do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1

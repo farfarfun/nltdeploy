@@ -12,7 +12,7 @@
 
 - **一键安装**：单入口脚本（可 `curl | bash`，也可 clone 后本地执行）完成目录创建、文件同步、`bin` 下命令就绪，并提示配置 `PATH`。
 - **统一安装根**：运行时工具箱根目录为 **`~/.local/nltdeploy`**（可通过环境变量覆盖，见第 6 节）。
-- **PATH 仅暴露 `nlt-*`**：用户可执行文件全部以 `nlt-` 开头；其中 **服务启停类** 以 **`nlt-service-`** 开头。
+- **PATH 仅暴露 `nlt-*`**：用户可执行文件全部以 `nlt-` 开头（含工具、安装类与服务生命周期，**不再**单独使用 `nlt-service-*` 前缀）。
 - **实现与入口分离**：真实逻辑放在 **`libexec/nltdeploy/`**，`bin` 仅为薄包装，便于升级与测试。
 
 成功标准：安装后在不进入仓库目录的情况下，仅依赖 `PATH` 即可调用文档中列出的命令；现有 `scripts/` 行为可通过迁移表逐项对齐或显式废弃。
@@ -25,8 +25,9 @@
 |------|------|------|
 | 主形态 | **A：Bash 小命令为主** | 与当前仓库以 shell 为主力一致；Python 包不作为终端主入口（可后续作为可选依赖，本规格不强制）。 |
 | 命令前缀 | **`nlt-`** | 所有 `bin` 内可执行文件名均以此开头。 |
-| 服务类前缀 | **`nlt-service-`** | 长期运行服务的 start/stop/restart/status 等归属此族。 |
-| Airflow「首次安装」 | **`nlt-airflow-install`（非 service）** | 与「装环境」一致归为工具/安装类；装好后日常运维用 **`nlt-service-airflow`** 接子命令（如 `start` / `status`），与 `nlt-airflow` 等价透传。 |
+| 服务生命周期 | **`nlt-<域>`** | 与 **`nlt-airflow`**、**`nlt-celery`**、**`nlt-paperclip`** 等总控入口透传 `start` / `stop` / `status` / `update` 等子命令；**不**再生成 `nlt-service-<域>` 重复包装。 |
+| Airflow「首次安装」 | **`nlt-airflow-install`** | 首次/干净环境安装；日常运维用 **`nlt-airflow`** 接子命令。 |
+| Celery | **`nlt-celery-install`** / **`nlt-celery-update`** / **`nlt-celery`** | 安装、依赖升级与全量子命令（含 worker/beat/flower）分口，与 Airflow 的 install + 总控对称。 |
 | 数据与运行时目录 | **默认保持现有 `~/opt/...` 约定** | 与 README 及现有脚本一致，降低迁移成本；若设置 `AIRFLOW_HOME` / `CELERY_HOME` 等，仍以用户环境为准。后续可在实现阶段增加可选「统一到 `~/.local/nltdeploy/var`」的迁移助手，**不作为本规格 v1 默认行为**。 |
 
 ---
@@ -41,7 +42,7 @@
 └── etc/nltdeploy/                # 用户级配置覆盖（可选）
 ```
 
-- **`bin/`**：仅包含名称以 `nlt-` 开头的文件（含 `nlt-service-*`）。
+- **`bin/`**：仅包含名称以 `nlt-` 开头的文件。
 - **`libexec/nltdeploy/`**：可按域分子目录（例如 `pip/`、`python-env/`、`airflow/`、`celery/`），具体结构由实现计划定义；规格要求 **不将 `libexec` 加入 PATH**。
 
 ---
@@ -68,11 +69,11 @@
 
 ### 4.3 服务（进程生命周期）
 
-- 模式：**`nlt-service-<服务名>`** 为单一薄包装，`exec` 到对应域脚本并 **透传 `"$@"`**；动作为 **第一个参数**（及后续参数）。
+- 模式：**`nlt-<服务名>`** 为薄包装，`exec` 到对应域 `setup.sh` 并 **透传 `"$@"`**；动作为 **第一个参数**（及后续参数）。
 - 动作建议统一为：`start` | `stop` | `restart` | `status` | `update`（Celery 另有 `start-worker` / `start-beat` / `start-flower` 等，与域脚本一致）。
 - 示例：
-  - `nlt-service-airflow start` / `stop` / `restart` / `status` / `update`
-  - `nlt-service-celery start-worker` / `start-beat` / `stop` / `status` / …
+  - `nlt-airflow start` / `stop` / `restart` / `status` / `update`
+  - `nlt-celery start-worker` / `start-beat` / `stop` / `status` / …
 
 ---
 
@@ -111,7 +112,7 @@
 ## 8. 测试与验收（规格层）
 
 - 安装脚本在 **macOS 与 Linux**（含无 TTY 的 `NONINTERACTIVE`）下可完成安装。
-- 抽样验收：`nlt-pip-sources`、`nlt-python-env`、`nlt-airflow-install`、`nlt-service-airflow status`（在未安装服务时可有明确退出码与提示）等按迁移表可调用。
+- 抽样验收：`nlt-pip-sources`、`nlt-python-env`、`nlt-airflow-install`、`nlt-airflow status`（在未安装服务时可有明确退出码与提示）等按迁移表可调用。
 
 ---
 
@@ -125,5 +126,5 @@
 ## 规格自检记录
 
 - **占位符**：无 TBD；数据目录默认策略已写死为保留 `~/opt` 与既有 env。
-- **一致性**：服务类仅 `nlt-service-*`；Airflow 安装单独 `nlt-airflow-install`，与上文表格一致。
+- **一致性**：服务生命周期统一经 `nlt-<域>`；Airflow / Celery 的首次安装仍用 `nlt-airflow-install`、`nlt-celery-install`，与上文表格一致。
 - **范围**：本文件仅定义布局与命名；不展开具体 systemd/launchd 或进程管理实现细节（归入实现计划）。

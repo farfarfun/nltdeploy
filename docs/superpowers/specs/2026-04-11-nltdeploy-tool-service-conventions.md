@@ -59,8 +59,8 @@
 ### 3.2 与 `bin` 命名的关系（不破坏现有安装）
 
 - **推荐**：每个域一个 **总控入口**（如 `nlt-airflow` → `airflow/setup.sh "$@"`），所有子命令通过参数触发直执行或 gum 菜单。
-- **服务族命名**：每个长期运行域对应 **一个** **`nlt-service-<域>`**，透传子命令（如 `nlt-service-airflow start`），**不再**为每个动词单独生成 `nlt-service-<域>-<动词>` 文件。
-- **新增服务/工具**：优先 **总控** `nlt-<域>` 与 **`nlt-service-<域>`**（二者可指向同一 libexec 脚本）；安装类入口仍可用 `nlt-<域>-install`。
+- **服务域**：长期运行域只用 **`nlt-<域>`** 透传子命令（如 `nlt-airflow start`），**不**再提供并行的 `nlt-service-<域>` 包装。
+- **新增服务/工具**：总控 `nlt-<域>`；需要单独语义时仍可用 `nlt-<域>-install` / `nlt-<域>-update`（如 Celery）等，**不为**每个动词单独生成 `nlt-<域>-<动词>` 文件。
 
 ---
 
@@ -102,7 +102,7 @@
 - [ ] 无参数走 gum 交互；带首参子命令时直执行，不经过主菜单。  
 - [ ] 需要 gum 前调用 `_nlt_ensure_gum`，且 gum 已安装时 O(1) 跳过。  
 - [ ] `NONINTERACTIVE=1` 行为在脚本头注释中说明。  
-- [ ] `install.sh` 与 README 中的 `nlt-*` / `nlt-service-*` 对照表已更新（若新增包装）。
+- [ ] `install.sh` 与 README 中的 `nlt-*` 对照表已更新（若新增包装）。
 
 ---
 

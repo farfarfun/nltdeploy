@@ -166,7 +166,7 @@ cmd_status() {
     echo "  Flower URL: http://${FLOWER_ADDRESS}:${FLOWER_PORT}/"
     echo "  探测:       $(http_probe "http://${FLOWER_ADDRESS}:${FLOWER_PORT}/")"
   fi
-  echo "  详情:       nlt-service-celery status"
+  echo "  详情:       nlt-celery status"
 
   section "Paperclip"
   echo "  名称:     Paperclip"

@@ -328,23 +328,19 @@ do_install_or_update() {
 
   _emit_wrapper nlt-airflow-install airflow/setup.sh install
   _emit_wrapper nlt-airflow airflow/setup.sh
-  _emit_wrapper nlt-service-airflow airflow/setup.sh
 
   _emit_wrapper nlt-celery-install celery/setup.sh install
   _emit_wrapper nlt-celery-update celery/setup.sh update
-  _emit_wrapper nlt-service-celery celery/setup.sh
+  _emit_wrapper nlt-celery celery/setup.sh
 
   _emit_wrapper nlt-paperclip-install paperclip/setup.sh install
   _emit_wrapper nlt-paperclip paperclip/setup.sh
-  _emit_wrapper nlt-service-paperclip paperclip/setup.sh
 
   _emit_wrapper nlt-code-server-install code-server/setup.sh install
   _emit_wrapper nlt-code-server code-server/setup.sh
-  _emit_wrapper nlt-service-code-server code-server/setup.sh
 
   _emit_wrapper nlt-new-api-install new-api/setup.sh install
   _emit_wrapper nlt-new-api new-api/setup.sh
-  _emit_wrapper nlt-service-new-api new-api/setup.sh
 
   if [[ "${NLTDEPLOY_SKIP_PROFILE_HINT:-}" != "1" ]]; then
     echo ""

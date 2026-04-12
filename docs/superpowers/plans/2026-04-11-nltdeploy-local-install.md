@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 提供仓库根目录一键 `install.sh`，将 `scripts/` 中的实现同步到 `~/.local/nltdeploy/libexec/nltdeploy/`，并在 `bin/` 生成符合规格的 `nlt-*` / `nlt-service-*` 薄包装；文档与 `NLTDEPLOY_RAW_BASE` 兼容变量同步更新。
+**Goal:** 提供仓库根目录一键 `install.sh`，将 `scripts/` 中的实现同步到 `~/.local/nltdeploy/libexec/nltdeploy/`，并在 `bin/` 生成符合规格的 **`nlt-*`** 薄包装；文档与 `NLTDEPLOY_RAW_BASE` 兼容变量同步更新。
 
 **Architecture:** 以 **`scripts/` 为单一源码真相**（不在首版重复维护第二套脚本正文）。安装时按固定映射表 **复制** 到 `libexec`（避免符号链接在打包/部分文件系统上的问题）。`bin` 下全部为两行级薄包装：`NLTDEPLOY_ROOT` + `exec` 到 libexec 目标并附加固定子命令参数。Airflow/Celery 继续沿用现有 `setup.sh` 的子命令接口。
 
@@ -143,10 +143,10 @@ _emit_wrapper nlt-github-net github-net/setup.sh
 
 _emit_wrapper nlt-airflow-install airflow/setup.sh install
 _emit_wrapper nlt-airflow airflow/setup.sh
-_emit_wrapper nlt-service-airflow airflow/setup.sh
 
 _emit_wrapper nlt-celery-install celery/setup.sh install
-_emit_wrapper nlt-service-celery celery/setup.sh
+_emit_wrapper nlt-celery-update celery/setup.sh update
+_emit_wrapper nlt-celery celery/setup.sh
 ```
 
 - [ ] **Step 3: 安装结束提示 PATH（不默认写 profile）**
@@ -169,7 +169,7 @@ Expected: 退出码 0。
 
 ```bash
 git add install.sh
-git commit -m "feat: generate nlt-* and nlt-service-* bin wrappers in install.sh"
+git commit -m "feat: generate nlt-* bin wrappers in install.sh"
 ```
 
 ---
@@ -237,8 +237,8 @@ export NLTDEPLOY_ROOT="${TMP}/nd"
 bash "${ROOT}/install.sh"
 for f in \
   nlt-pip-sources nlt-python-env nlt-utils nlt-github-net \
-  nlt-airflow-install nlt-airflow nlt-service-airflow \
-  nlt-celery-install nlt-service-celery
+  nlt-airflow-install nlt-airflow \
+  nlt-celery-install nlt-celery-update nlt-celery
 do
   [[ -x "${NLTDEPLOY_ROOT}/bin/${f}" ]] || { echo "missing: bin/${f}" >&2; exit 1; }
   bash -n "${NLTDEPLOY_ROOT}/bin/${f}" || exit 1
@@ -280,7 +280,7 @@ git commit -m "test: add install smoke test for bin wrappers and libexec"
 
 表格列：`新命令（bin）` | `原 scripts 路径与用法` | 备注。
 
-须包含本计划中 `_emit_wrapper` 列出的全部 `nlt-*` / `nlt-service-*` 名称。
+须包含本计划中 `_emit_wrapper` 列出的全部 `nlt-*` 名称。
 
 - [ ] **Step 3: 在「环境变量」相关小节补充 `NLTDEPLOY_RAW_BASE`**
 
@@ -301,7 +301,7 @@ git commit -m "docs: document local install, nlt-* mapping, and NLTDEPLOY_RAW_BA
 |----------|----------|
 | 一键安装 + `bin` 仅 `nlt-*` | Task 1–2 |
 | `libexec` 实现分离 | Task 1 |
-| `nlt-service-<域>` 单入口透传子命令 | Task 2（Airflow/Celery 等） |
+| `nlt-<域>` 单入口透传子命令 | Task 2（Airflow/Celery 等） |
 | `nlt-airflow-install` 非 service | Task 2 |
 | `NLTDEPLOY_ROOT` 可覆盖 | Task 1–2 薄包装 |
 | `NONINTERACTIVE` 保留 | 无需改脚本（沿用现有） |
