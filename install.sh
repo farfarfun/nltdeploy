@@ -264,7 +264,7 @@ do_install_or_update() {
   LIBEXEC="${NLTDEPLOY_ROOT}/libexec/nltdeploy"
   mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \
     "${NLTDEPLOY_ROOT}/share/nltdeploy" "${NLTDEPLOY_ROOT}/etc/nltdeploy"
-  mkdir -p "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" "${LIBEXEC}/build" \
+  mkdir -p "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" \
     "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net" \
     "${LIBEXEC}/paperclip" "${LIBEXEC}/code-server" "${LIBEXEC}/new-api" \
     "${LIBEXEC}/services" \
@@ -300,16 +300,6 @@ do_install_or_update() {
     "${SCRIPTS}/tools/github-net/setup.sh" \
     "${SCRIPTS}/github-net/setup.sh"
 
-  _nlt_cp_first "${LIBEXEC}/build/setup.sh" \
-    "${SCRIPTS}/tools/build/setup.sh" \
-    "${SCRIPTS}/build/setup.sh"
-
-  if [[ -f "${SCRIPTS}/tools/build/nltbuild_core.py" ]]; then
-    cp -f "${SCRIPTS}/tools/build/nltbuild_core.py" "${LIBEXEC}/build/nltbuild_core.py"
-  else
-    die "找不到 ${SCRIPTS}/tools/build/nltbuild_core.py"
-  fi
-
   _nlt_cp_first "${LIBEXEC}/paperclip/setup.sh" \
     "${SCRIPTS}/services/paperclip/setup.sh" \
     "${SCRIPTS}/paperclip/setup.sh" \
@@ -334,7 +324,6 @@ do_install_or_update() {
   _emit_wrapper nlt-python-env python-env/setup.sh
   _emit_wrapper nlt-utils utils/setup.sh
   _emit_wrapper nlt-github-net github-net/setup.sh
-  _emit_wrapper nlt-build build/setup.sh
   _emit_wrapper nlt-services services/nlt-services.sh
 
   _emit_wrapper nlt-airflow airflow/setup.sh
@@ -342,6 +331,8 @@ do_install_or_update() {
   _emit_wrapper nlt-paperclip paperclip/setup.sh
   _emit_wrapper nlt-code-server code-server/setup.sh
   _emit_wrapper nlt-new-api new-api/setup.sh
+  rm -rf "${LIBEXEC}/build"
+  rm -f "${NLTDEPLOY_ROOT}/bin/nlt-build"
   rm -f \
     "${NLTDEPLOY_ROOT}/bin/nlt-airflow-install" \
     "${NLTDEPLOY_ROOT}/bin/nlt-celery-install" \

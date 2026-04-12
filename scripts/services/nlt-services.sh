@@ -33,7 +33,7 @@ usage() {
   无参数：gum 菜单（status / install / help / quit）。
 
 命令:
-  status [--no-http]    汇总 Airflow、Celery、Paperclip、code-server、new-api（有 gum 时用 gum table -p；否则 column）
+  status [--no-http]    汇总 Airflow、Celery、Paperclip、code-server、new-api（gum table -p）
   install               无参：gum 先选「安装 / 卸载」，再选模块。
   install add <模块>    安装（add 可写 install）
   install remove <模块> 卸载（remove 可写 uninstall；celery/utils 不支持）
@@ -101,25 +101,12 @@ _status_csv_line() {
     "$(_csv_cell "$1")" "$(_csv_cell "$2")" "$(_csv_cell "$3")" "$(_csv_cell "$4")" "$(_csv_cell "$5")"
 }
 
-# Tab 行 → column -t（无 gum 时的回退）
-_status_tsv_line() {
-  printf '%s\t%s\t%s\t%s\t%s\n' "$1" "$2" "$3" "$4" "$5"
-}
-
 # stdin 为数据行 CSV（无表头；列名由 --columns 指定）→ gum table 静态打印
 _render_status_table_from_csv() {
   PATH="${HOME}/opt/gum/bin:${PATH}"
   gum table -p -s ',' \
     --columns '服务,状态,PID,端口/访问,HTTP' \
     --border rounded
-}
-
-_print_status_rows_column() {
-  if command -v column >/dev/null 2>&1; then
-    column -t -s $'\t'
-  else
-    cat
-  fi
 }
 
 _mark_alive() {
@@ -186,75 +173,38 @@ cmd_status() {
   echo ""
 
   PATH="${HOME}/opt/gum/bin:${PATH}"
-  if command -v gum >/dev/null 2>&1; then
-    {
-      _status_csv_line \
-        "airflow" \
-        "$(status_word "$airflow_pid")" \
-        "${airflow_pid:--}" \
-        "${AIRFLOW_PORT} → 127.0.0.1:${AIRFLOW_PORT}" \
-        "$(http_probe "http://127.0.0.1:${AIRFLOW_PORT}/")"
-      _status_csv_line \
-        "celery" \
-        "wbf ${cel_wbf}" \
-        "${cel_pids}" \
-        "flower ${FLOWER_PORT} (${FLOWER_ADDRESS})" \
-        "${cel_probe}"
-      _status_csv_line \
-        "paperclip" \
-        "$(status_word "$pid_pc")" \
-        "${pid_pc:--}" \
-        "${PAPERCLIP_PORT} /api/health" \
-        "$(http_probe "http://127.0.0.1:${PAPERCLIP_PORT}/api/health")"
-      _status_csv_line \
-        "code-server" \
-        "$(status_word "$pid_cs")" \
-        "${pid_cs:--}" \
-        "${CODE_SERVER_BIND}" \
-        "$(http_probe "http://127.0.0.1:${CODE_SERVER_PORT}/")"
-      _status_csv_line \
-        "new-api" \
-        "$(status_word "$pid_na")" \
-        "${pid_na:--}" \
-        "${NEW_API_PORT} → 127.0.0.1:${NEW_API_PORT}" \
-        "$(http_probe "http://127.0.0.1:${NEW_API_PORT}/")"
-    } | _render_status_table_from_csv
-  else
-    echo "（未检测到 gum，使用 column 对齐；安装 gum 见 nlt-utils 或 ~/opt/gum/bin）" >&2
-    {
-      _status_tsv_line "服务" "状态" "PID" "端口/访问" "HTTP"
-      _status_tsv_line \
-        "airflow" \
-        "$(status_word "$airflow_pid")" \
-        "${airflow_pid:--}" \
-        "${AIRFLOW_PORT} → 127.0.0.1:${AIRFLOW_PORT}" \
-        "$(http_probe "http://127.0.0.1:${AIRFLOW_PORT}/")"
-      _status_tsv_line \
-        "celery" \
-        "wbf ${cel_wbf}" \
-        "${cel_pids}" \
-        "flower ${FLOWER_PORT} (${FLOWER_ADDRESS})" \
-        "${cel_probe}"
-      _status_tsv_line \
-        "paperclip" \
-        "$(status_word "$pid_pc")" \
-        "${pid_pc:--}" \
-        "${PAPERCLIP_PORT} /api/health" \
-        "$(http_probe "http://127.0.0.1:${PAPERCLIP_PORT}/api/health")"
-      _status_tsv_line \
-        "code-server" \
-        "$(status_word "$pid_cs")" \
-        "${pid_cs:--}" \
-        "${CODE_SERVER_BIND}" \
-        "$(http_probe "http://127.0.0.1:${CODE_SERVER_PORT}/")"
-      _status_tsv_line \
-        "new-api" \
-        "$(status_word "$pid_na")" \
-        "${pid_na:--}" \
-        "${NEW_API_PORT} → 127.0.0.1:${NEW_API_PORT}" \
-        "$(http_probe "http://127.0.0.1:${NEW_API_PORT}/")"
-    } | _print_status_rows_column
-  fi
+  {
+    _status_csv_line \
+      "airflow" \
+      "$(status_word "$airflow_pid")" \
+      "${airflow_pid:--}" \
+      "${AIRFLOW_PORT} → 127.0.0.1:${AIRFLOW_PORT}" \
+      "$(http_probe "http://127.0.0.1:${AIRFLOW_PORT}/")"
+    _status_csv_line \
+      "celery" \
+      "wbf ${cel_wbf}" \
+      "${cel_pids}" \
+      "flower ${FLOWER_PORT} (${FLOWER_ADDRESS})" \
+      "${cel_probe}"
+    _status_csv_line \
+      "paperclip" \
+      "$(status_word "$pid_pc")" \
+      "${pid_pc:--}" \
+      "${PAPERCLIP_PORT} /api/health" \
+      "$(http_probe "http://127.0.0.1:${PAPERCLIP_PORT}/api/health")"
+    _status_csv_line \
+      "code-server" \
+      "$(status_word "$pid_cs")" \
+      "${pid_cs:--}" \
+      "${CODE_SERVER_BIND}" \
+      "$(http_probe "http://127.0.0.1:${CODE_SERVER_PORT}/")"
+    _status_csv_line \
+      "new-api" \
+      "$(status_word "$pid_na")" \
+      "${pid_na:--}" \
+      "${NEW_API_PORT} → 127.0.0.1:${NEW_API_PORT}" \
+      "$(http_probe "http://127.0.0.1:${NEW_API_PORT}/")"
+  } | _render_status_table_from_csv
 
   echo ""
   echo "说明:"
