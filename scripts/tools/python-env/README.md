@@ -32,7 +32,7 @@
 
 ```bash
 # 进入脚本目录
-cd scripts/python-env
+cd scripts/tools/python-env
 
 # 给脚本添加执行权限
 chmod +x setup.sh
@@ -77,21 +77,21 @@ NONINTERACTIVE=1 ./setup.sh
 
 ```bash
 # 正常执行（支持交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/tools/python-env/setup.sh | bash
 # 国内（Gitee，与 GitHub 同步）
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/python-env/setup.sh | bash
 
 # 指定版本（跳过交互）
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash -s -- -v 3.12
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash -s -- -v 3.12
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/tools/python-env/setup.sh | bash -s -- -v 3.12
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/python-env/setup.sh | bash -s -- -v 3.12
 
 # 指定版本并强制重新创建
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash -s -- -v 3.11 -f
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash -s -- -v 3.11 -f
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/tools/python-env/setup.sh | bash -s -- -v 3.11 -f
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/python-env/setup.sh | bash -s -- -v 3.11 -f
 
 # 指定版本并安装额外的包
-curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/python-env/setup.sh | bash -s -- -v 3.12 -p requests -p flask
-curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/python-env/setup.sh | bash -s -- -v 3.12 -p requests -p flask
+curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/tools/python-env/setup.sh | bash -s -- -v 3.12 -p requests -p flask
+curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/python-env/setup.sh | bash -s -- -v 3.12 -p requests -p flask
 ```
 
 ## 工作流程

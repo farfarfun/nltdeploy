@@ -21,8 +21,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/nlt-common.sh
-source "${SCRIPT_DIR}/../lib/nlt-common.sh"
+# shellcheck source=../../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
 
 CODE_SERVER_SERVICE_HOME="${CODE_SERVER_SERVICE_HOME:-${HOME}/opt/code-server}"
 CODE_SERVER_BIND="${CODE_SERVER_BIND:-127.0.0.1:8080}"

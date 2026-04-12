@@ -74,7 +74,7 @@
 ### 4.2 `_nlt_ensure_gum` 行为约定
 
 1. **若已可用**：`command -v gum` 成功，或约定路径下已有可执行文件（与现有 `~/opt/gum/bin` 策略一致），则 **立即返回 0**，不得重复下载或重复安装。
-2. **若不可用**：调用与本仓库一致的 gum 安装方式（例如通过 `NLTDEPLOY_RAW_BASE` / `nltdeploy_RAW_BASE` 拉取 `scripts/utils/setup.sh` 并执行 `bash -s -- gum`，或 libexec 内已复制的 `utils/setup.sh`），执行后再次保证 `PATH` 含 gum。
+2. **若不可用**：调用与本仓库一致的 gum 安装方式（例如通过 `NLTDEPLOY_RAW_BASE` / `nltdeploy_RAW_BASE` 拉取 `scripts/tools/utils/setup.sh` 并执行 `bash -s -- gum`，或 libexec 内已复制的 `utils/setup.sh`），执行后再次保证 `PATH` 含 gum。
 3. **gum 安装过程本身** 不使用 gum 做交互（与用户要求「gum 安装除外」一致）；该过程可使用 `NONINTERACTIVE`、环境变量或自带的最小提示。
 
 ### 4.3 交互范围

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 一键安装 / 更新 / 卸载 nltdeploy 到 ~/.local/nltdeploy（可通过 NLTDEPLOY_ROOT 覆盖）。
-# 用法见下方 usage；无参数且为交互式终端时，会先选择「安装或更新」/「卸载」，不直接写盘。
+# 用法见下方 usage；无参数且为交互式终端时，会先选择「安装」「更新」或「卸载」，不直接写盘。
 # 管道非 TTY 时必须显式传入子命令，例如: curl … | bash -s -- install
 set -euo pipefail
 
@@ -19,7 +19,7 @@ usage() {
   uninstall / remove 删除 NLTDEPLOY_ROOT，并从 shell 配置中移除本安装器写入的 PATH 片段
 
 无参数:
-  交互式终端下会先询问「安装或更新」或「卸载」（有 gum 则用 gum）。
+  交互式终端下会先询问「安装」「更新」或「卸载」（有 gum 则用 gum）。
   非交互（管道、无 TTY）或无参数且 NONINTERACTIVE=1 时必须写明子命令，例如:
     curl -LsSf …/install.sh | bash -s -- install
 
@@ -179,19 +179,21 @@ _remove_managed_path_block_from_file() {
 _pick_cmd_interactive() {
   if command -v gum >/dev/null 2>&1; then
     local p
-    p="$(gum choose --header "nltdeploy" "安装或更新" "卸载" "退出")" || exit 0
+    p="$(gum choose --header "nltdeploy" "安装" "更新" "卸载" "退出")" || exit 0
     case "$p" in
-      安装或更新) echo "install" ;;
+      安装) echo "install" ;;
+      更新) echo "update" ;;
       卸载) echo "uninstall" ;;
       *) exit 0 ;;
     esac
   else
     echo "请选择:" >&2
-    echo "  1) 安装或更新   2) 卸载   3) 退出" >&2
-    read -r -p "输入 1-3: " sel
+    echo "  1) 安装   2) 更新   3) 卸载   4) 退出" >&2
+    read -r -p "输入 1-4: " sel
     case "$sel" in
       1) echo "install" ;;
-      2) echo "uninstall" ;;
+      2) echo "update" ;;
+      3) echo "uninstall" ;;
       *) exit 0 ;;
     esac
   fi
@@ -245,31 +247,31 @@ do_install_or_update() {
   cp -f "${SCRIPTS}/lib/nlt-common.sh" "${LIBEXEC}/lib/nlt-common.sh"
   chmod 0755 "${LIBEXEC}/lib/nlt-common.sh"
 
-  cp -f "${SCRIPTS}/pip-sources/setup.sh" "${LIBEXEC}/pip-sources/setup.sh"
+  cp -f "${SCRIPTS}/tools/pip-sources/setup.sh" "${LIBEXEC}/pip-sources/setup.sh"
   chmod 0755 "${LIBEXEC}/pip-sources/setup.sh"
 
-  cp -f "${SCRIPTS}/python-env/setup.sh" "${LIBEXEC}/python-env/setup.sh"
+  cp -f "${SCRIPTS}/tools/python-env/setup.sh" "${LIBEXEC}/python-env/setup.sh"
   chmod 0755 "${LIBEXEC}/python-env/setup.sh"
 
-  cp -f "${SCRIPTS}/airflow/setup.sh" "${LIBEXEC}/airflow/setup.sh"
+  cp -f "${SCRIPTS}/services/airflow/setup.sh" "${LIBEXEC}/airflow/setup.sh"
   chmod 0755 "${LIBEXEC}/airflow/setup.sh"
 
-  cp -f "${SCRIPTS}/celery/setup.sh" "${LIBEXEC}/celery/setup.sh"
+  cp -f "${SCRIPTS}/services/celery/setup.sh" "${LIBEXEC}/celery/setup.sh"
   chmod 0755 "${LIBEXEC}/celery/setup.sh"
 
-  cp -f "${SCRIPTS}/utils/setup.sh" "${LIBEXEC}/utils/setup.sh"
+  cp -f "${SCRIPTS}/tools/utils/setup.sh" "${LIBEXEC}/utils/setup.sh"
   chmod 0755 "${LIBEXEC}/utils/setup.sh"
 
-  cp -f "${SCRIPTS}/github-net/setup.sh" "${LIBEXEC}/github-net/setup.sh"
+  cp -f "${SCRIPTS}/tools/github-net/setup.sh" "${LIBEXEC}/github-net/setup.sh"
   chmod 0755 "${LIBEXEC}/github-net/setup.sh"
 
-  cp -f "${SCRIPTS}/paperclip/setup.sh" "${LIBEXEC}/paperclip/setup.sh"
+  cp -f "${SCRIPTS}/services/paperclip/setup.sh" "${LIBEXEC}/paperclip/setup.sh"
   chmod 0755 "${LIBEXEC}/paperclip/setup.sh"
 
-  cp -f "${SCRIPTS}/code-server/setup.sh" "${LIBEXEC}/code-server/setup.sh"
+  cp -f "${SCRIPTS}/services/code-server/setup.sh" "${LIBEXEC}/code-server/setup.sh"
   chmod 0755 "${LIBEXEC}/code-server/setup.sh"
 
-  cp -f "${SCRIPTS}/new-api/setup.sh" "${LIBEXEC}/new-api/setup.sh"
+  cp -f "${SCRIPTS}/services/new-api/setup.sh" "${LIBEXEC}/new-api/setup.sh"
   chmod 0755 "${LIBEXEC}/new-api/setup.sh"
 
   cp -f "${SCRIPTS}/services/nlt-services.sh" "${LIBEXEC}/services/nlt-services.sh"

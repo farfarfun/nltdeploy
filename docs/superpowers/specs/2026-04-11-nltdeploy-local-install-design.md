@@ -60,11 +60,11 @@
 
 | 现有入口 | 目标命令（示例） |
 |----------|------------------|
-| `pip-sources/setup.sh` | `nlt-pip-sources` |
-| `python-env/setup.sh` | `nlt-python-env` |
-| `utils/setup.sh` | `nlt-utils` 或拆分为 `nlt-utils-gum` 等 |
-| `github-net/setup.sh` | `nlt-github-net` |
-| Airflow 首次安装/升级（原 `airflow/setup.sh` 中非启停部分） | `nlt-airflow-install` |
+| `scripts/tools/pip-sources/setup.sh` | `nlt-pip-sources` |
+| `scripts/tools/python-env/setup.sh` | `nlt-python-env` |
+| `scripts/tools/utils/setup.sh` | `nlt-utils` 或拆分为 `nlt-utils-gum` 等 |
+| `scripts/tools/github-net/setup.sh` | `nlt-github-net` |
+| Airflow 首次安装/升级（原 `scripts/services/airflow/setup.sh` 中非启停部分） | `nlt-airflow-install` |
 
 ### 4.3 服务（进程生命周期）
 
@@ -95,7 +95,7 @@
 ## 6. 一键安装脚本（入口）
 
 - **职责**：创建 `~/.local/nltdeploy` 下目录结构；将 `libexec/nltdeploy` 内容从发布包或 git 检出位置同步到目标根；生成或更新 `bin` 下全部薄包装；可选：检测并打印 `PATH` 配置提示。
-- **`install.sh [install|update|uninstall]`**：无参数且为 **TTY** 时先交互选择「安装或更新」或「卸载」；**非 TTY / `NONINTERACTIVE=1` 且无参数则报错**，须显式 **`install`**（与 **`update` 等价**）或 **`uninstall`**。同步前若 `scripts/` 在 **git 仓库** 内则 **`git pull --ff-only`**；**`NLTDEPLOY_SKIP_GIT_PULL=1`** 跳过拉取。**`uninstall`** 删除 **`NLTDEPLOY_ROOT`** 并移除已写入 rc 的 PATH 标记块；非 TTY 须 **`NLTDEPLOY_UNINSTALL_YES=1`**。
+- **`install.sh [install|update|uninstall]`**：无参数且为 **TTY** 时先交互选择「安装」「更新」或「卸载」；**非 TTY / `NONINTERACTIVE=1` 且无参数则报错**，须显式 **`install`**（与 **`update` 等价**）或 **`uninstall`**。同步前若 `scripts/` 在 **git 仓库** 内则 **`git pull --ff-only`**；**`NLTDEPLOY_SKIP_GIT_PULL=1`** 跳过拉取。**`uninstall`** 删除 **`NLTDEPLOY_ROOT`** 并移除已写入 rc 的 PATH 标记块；非 TTY 须 **`NLTDEPLOY_UNINSTALL_YES=1`**。
 - **`curl …/install.sh | bash -s -- install`**：管道无 TTY 时必须传子命令。无法解析到与 `install.sh` 同目录的 `scripts/` 时，在 **`${NLTDEPLOY_ROOT}/src/nltdeploy`** 执行 **`git clone`**（GitHub 优先，失败 Gitee）。需 **`git`**。
 - **PATH**：默认自动追加带标记的片段至 shell rc；**`NLTDEPLOY_SKIP_PROFILE_HINT=1`** 可关闭。
 

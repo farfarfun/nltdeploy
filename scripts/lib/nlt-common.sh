@@ -9,10 +9,10 @@ _nltdeploy_raw_base() {
 }
 
 _nlt_gum_utils_setup_url() {
-  printf '%s\n' "$(_nltdeploy_raw_base)/scripts/utils/setup.sh"
+  printf '%s\n' "$(_nltdeploy_raw_base)/scripts/tools/utils/setup.sh"
 }
 
-# 已安装 gum 则立即返回；否则拉取 scripts/utils/setup.sh 安装（不单独做「仅检测并报错」）。
+# 已安装 gum 则立即返回；否则拉取 scripts/tools/utils/setup.sh 安装（不单独做「仅检测并报错」）。
 _nlt_ensure_gum() {
   export PATH="${HOME}/opt/gum/bin:${PATH}"
   command -v gum >/dev/null 2>&1 && return 0

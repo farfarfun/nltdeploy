@@ -5,8 +5,8 @@
 
 set -e  # 遇到错误立即退出
 
-_NLT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)"
-# shellcheck source=../lib/nlt-common.sh
+_NLT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)"
+# shellcheck source=../../lib/nlt-common.sh
 source "${_NLT_LIB}/nlt-common.sh"
 
 # 颜色输出

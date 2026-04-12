@@ -5,8 +5,8 @@
 
 set -e  # 遇到错误立即退出
 
-_NLT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../lib" && pwd)"
-# shellcheck source=../lib/nlt-common.sh
+_NLT_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../lib" && pwd)"
+# shellcheck source=../../lib/nlt-common.sh
 source "${_NLT_LIB}/nlt-common.sh"
 
 # 颜色输出
@@ -220,7 +220,7 @@ show_help() {
   NONINTERACTIVE=1 $0     # 非交互模式，自动配置
 
 通过 curl 执行:
-  curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/pip-sources/setup.sh | bash
+  curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/tools/pip-sources/setup.sh | bash
 EOF
 }
 

@@ -22,8 +22,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/nlt-common.sh
-source "${SCRIPT_DIR}/../lib/nlt-common.sh"
+# shellcheck source=../../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
 
 NEW_API_GITHUB_REPO="${NEW_API_GITHUB_REPO:-QuantumNous/new-api}"
 NEW_API_SERVICE_HOME="${NEW_API_SERVICE_HOME:-${HOME}/opt/new-api}"

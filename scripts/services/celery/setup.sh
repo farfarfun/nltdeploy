@@ -30,8 +30,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/nlt-common.sh
-source "${SCRIPT_DIR}/../lib/nlt-common.sh"
+# shellcheck source=../../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
 
 usage() {
   cat <<'USAGE'

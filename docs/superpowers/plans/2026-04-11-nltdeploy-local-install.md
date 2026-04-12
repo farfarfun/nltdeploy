@@ -15,9 +15,9 @@
 | 路径 | 职责 |
 |------|------|
 | `install.sh`（仓库根，新建） | 创建 `NLTDEPLOY_ROOT` 目录树；复制 `scripts/*` → `libexec/nltdeploy/...`；生成全部 `bin` 薄包装；打印 `PATH` 提示。 |
-| `scripts/pip-sources/setup.sh`（改） | `_nltdeploy_RAW_BASE` 同时识别 `NLTDEPLOY_RAW_BASE` 与 `nltdeploy_RAW_BASE`。 |
-| `scripts/python-env/setup.sh`（改） | 同上。 |
-| `scripts/airflow/setup.sh`（改） | 同上。 |
+| `scripts/tools/pip-sources/setup.sh`（改） | `_nltdeploy_RAW_BASE` 同时识别 `NLTDEPLOY_RAW_BASE` 与 `nltdeploy_RAW_BASE`。 |
+| `scripts/tools/python-env/setup.sh`（改） | 同上。 |
+| `scripts/services/airflow/setup.sh`（改） | 同上。 |
 | `README.md`（改） | 推荐安装方式、`nlt-*` 与旧 `scripts/` 对照表、`PATH` 与 `NLTDEPLOY_ROOT`、远程 `curl install.sh`。 |
 | `tests/install_smoke.sh`（新建） | 将 `NLTDEPLOY_ROOT` 指向临时目录并运行 `install.sh`，断言关键 `bin` 与 libexec 文件存在且 `bash -n` 通过。 |
 | `docs/superpowers/specs/2026-04-11-nltdeploy-local-install-design.md` | 只读对照，不修改除非规格勘误。 |
@@ -62,22 +62,22 @@ mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \
 install -m 0755 -d "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" \
   "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net"
 
-cp -f "${SCRIPTS}/pip-sources/setup.sh" "${LIBEXEC}/pip-sources/setup.sh"
+cp -f "${SCRIPTS}/tools/pip-sources/setup.sh" "${LIBEXEC}/pip-sources/setup.sh"
 chmod 0755 "${LIBEXEC}/pip-sources/setup.sh"
 
-cp -f "${SCRIPTS}/python-env/setup.sh" "${LIBEXEC}/python-env/setup.sh"
+cp -f "${SCRIPTS}/tools/python-env/setup.sh" "${LIBEXEC}/python-env/setup.sh"
 chmod 0755 "${LIBEXEC}/python-env/setup.sh"
 
-cp -f "${SCRIPTS}/airflow/setup.sh" "${LIBEXEC}/airflow/setup.sh"
+cp -f "${SCRIPTS}/services/airflow/setup.sh" "${LIBEXEC}/airflow/setup.sh"
 chmod 0755 "${LIBEXEC}/airflow/setup.sh"
 
-cp -f "${SCRIPTS}/celery/setup.sh" "${LIBEXEC}/celery/setup.sh"
+cp -f "${SCRIPTS}/services/celery/setup.sh" "${LIBEXEC}/celery/setup.sh"
 chmod 0755 "${LIBEXEC}/celery/setup.sh"
 
-cp -f "${SCRIPTS}/utils/setup.sh" "${LIBEXEC}/utils/setup.sh"
+cp -f "${SCRIPTS}/tools/utils/setup.sh" "${LIBEXEC}/utils/setup.sh"
 chmod 0755 "${LIBEXEC}/utils/setup.sh"
 
-cp -f "${SCRIPTS}/github-net/setup.sh" "${LIBEXEC}/github-net/setup.sh"
+cp -f "${SCRIPTS}/tools/github-net/setup.sh" "${LIBEXEC}/github-net/setup.sh"
 chmod 0755 "${LIBEXEC}/github-net/setup.sh"
 ```
 
@@ -177,9 +177,9 @@ git commit -m "feat: generate nlt-* and nlt-service-* bin wrappers in install.sh
 ### Task 3: `NLTDEPLOY_RAW_BASE` 与旧变量兼容
 
 **Files:**
-- Modify: `scripts/pip-sources/setup.sh`
-- Modify: `scripts/python-env/setup.sh`
-- Modify: `scripts/airflow/setup.sh`
+- Modify: `scripts/tools/pip-sources/setup.sh`
+- Modify: `scripts/tools/python-env/setup.sh`
+- Modify: `scripts/services/airflow/setup.sh`
 
 - [ ] **Step 1: 统一 raw base 一行替换**
 
@@ -202,9 +202,9 @@ _nltdeploy_RAW_BASE="${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.git
 Run:
 
 ```bash
-bash -n scripts/pip-sources/setup.sh
-bash -n scripts/python-env/setup.sh
-bash -n scripts/airflow/setup.sh
+bash -n scripts/tools/pip-sources/setup.sh
+bash -n scripts/tools/python-env/setup.sh
+bash -n scripts/services/airflow/setup.sh
 ```
 
 Expected: 均为退出码 0。
@@ -212,9 +212,9 @@ Expected: 均为退出码 0。
 - [ ] **Step 3: Commit**
 
 ```bash
-git add scripts/pip-sources/setup.sh \
-  scripts/python-env/setup.sh \
-  scripts/airflow/setup.sh
+git add scripts/tools/pip-sources/setup.sh \
+  scripts/tools/python-env/setup.sh \
+  scripts/services/airflow/setup.sh
 git commit -m "feat: honor NLTDEPLOY_RAW_BASE with fallback to nltdeploy_RAW_BASE"
 ```
 

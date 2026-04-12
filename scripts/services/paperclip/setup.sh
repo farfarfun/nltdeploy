@@ -22,8 +22,8 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/nlt-common.sh
-source "${SCRIPT_DIR}/../lib/nlt-common.sh"
+# shellcheck source=../../lib/nlt-common.sh
+source "${SCRIPT_DIR}/../../lib/nlt-common.sh"
 
 PAPERCLIP_SERVICE_HOME="${PAPERCLIP_SERVICE_HOME:-${HOME}/opt/paperclip}"
 PAPERCLIP_REPO_URL="${PAPERCLIP_REPO_URL:-https://github.com/paperclipai/paperclip.git}"

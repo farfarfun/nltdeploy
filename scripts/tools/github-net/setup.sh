@@ -18,8 +18,8 @@
 set -euo pipefail
 
 _SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=../lib/nlt-common.sh
-source "${_SCRIPT_DIR}/../lib/nlt-common.sh"
+# shellcheck source=../../lib/nlt-common.sh
+source "${_SCRIPT_DIR}/../../lib/nlt-common.sh"
 
 SCRIPT_NAME="$(basename "${BASH_SOURCE[0]}")"
 SSH_CONFIG_PATH="${HOME}/.ssh/config"

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # 本机常用 CLI 与 shell 便利项。与 README 一致可通过 curl 管道执行，不经仓库内脚本互引：
-#   curl -LsSf …/scripts/utils/setup.sh | bash -s -- gum      # 仅 gum
-#   curl -LsSf …/scripts/utils/setup.sh | bash -s -- aliases  # 仅 ll/la/lla 别名
-#   curl -LsSf …/scripts/utils/setup.sh | bash -s -- all      # gum + 别名
+#   curl -LsSf …/scripts/tools/utils/setup.sh | bash -s -- gum      # 仅 gum
+#   curl -LsSf …/scripts/tools/utils/setup.sh | bash -s -- aliases  # 仅 ll/la/lla 别名
+#   curl -LsSf …/scripts/tools/utils/setup.sh | bash -s -- all      # gum + 别名
 # 与 .cursor/agents/software-ops.md 一致：gum 安装在 ~/opt/gum/{bin,etc,data,log}。
 #
 # 用法：
