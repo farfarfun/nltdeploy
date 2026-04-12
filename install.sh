@@ -29,6 +29,7 @@ usage() {
   NLTDEPLOY_SKIP_PROFILE_HINT 设为 1 时不写入 PATH、不打印 PATH 说明（适合 CI）
   NLTDEPLOY_UNINSTALL_YES     设为 1 时非 TTY 也可执行 uninstall（确认删除）
   NLTDEPLOY_GITHUB_REPO / NLTDEPLOY_GITEE_REPO / NLTDEPLOY_SRC_DIR  见 README
+  NLTDEPLOY_GIT_CLONE_REF   管道安装时 git clone 的分支或 tag（可选）。raw 用 …/master/… 而仓库默认分支是 main 时，可设为 master 与脚本版本一致；不设则克隆远程默认分支。
 EOF
 }
 
@@ -45,6 +46,16 @@ _resolve_scripts_from_install_sh() {
   return 1
 }
 
+# 浅克隆；若设置了 NLTDEPLOY_GIT_CLONE_REF 则固定该分支/tag（与 raw 脚本 URL 中的 ref 对齐）。
+_nlt_git_clone_shallow() {
+  local url="$1" dest="$2"
+  if [[ -n "${NLTDEPLOY_GIT_CLONE_REF:-}" ]]; then
+    git clone --depth 1 --branch "${NLTDEPLOY_GIT_CLONE_REF}" "${url}" "${dest}"
+  else
+    git clone --depth 1 "${url}" "${dest}"
+  fi
+}
+
 # 将仓库克隆到 NLTDEPLOY_SRC_DIR（若尚不存在）；打印 scripts 目录绝对路径（其它信息走 stderr）。
 _ensure_clone_for_scripts() {
   command -v git >/dev/null 2>&1 || die "通过管道安装需要 git。请安装 git 或在克隆后的仓库根目录执行 ./install.sh"
@@ -56,9 +67,9 @@ _ensure_clone_for_scripts() {
     die "路径已存在但不是 git 仓库，请删除或移走后重试: ${repo}"
   else
     echo "正在从 GitHub 克隆 farfarfun/nltdeploy …" >&2
-    if ! git clone --depth 1 "${NLTDEPLOY_GITHUB_REPO}" "${repo}"; then
+    if ! _nlt_git_clone_shallow "${NLTDEPLOY_GITHUB_REPO}" "${repo}"; then
       echo "GitHub 不可用，正在从 Gitee 克隆 farfarfun/nltdeploy …" >&2
-      git clone --depth 1 "${NLTDEPLOY_GITEE_REPO}" "${repo}" || die "GitHub 与 Gitee 克隆均失败，请检查网络与代理"
+      _nlt_git_clone_shallow "${NLTDEPLOY_GITEE_REPO}" "${repo}" || die "GitHub 与 Gitee 克隆均失败，请检查网络与代理"
     fi
   fi
   [[ -d "${repo}/scripts" ]] || die "克隆完成但未找到 scripts 目录: ${repo}"
@@ -223,6 +234,21 @@ _emit_wrapper() {
   chmod 0755 "${bin_path}"
 }
 
+# 从候选路径中选第一个存在的文件复制到 dest 并 chmod 0755（兼容 _lib→lib、扁平 scripts 与 tools/services 分层）。
+_nlt_cp_first() {
+  local dest="$1"
+  shift
+  local f
+  for f in "$@"; do
+    if [[ -f "$f" ]]; then
+      cp -f "$f" "$dest"
+      chmod 0755 "$dest"
+      return 0
+    fi
+  done
+  die "找不到源文件，已尝试: $*"
+}
+
 do_install_or_update() {
   local SCRIPTS LIBEXEC
   SCRIPTS=""
@@ -244,38 +270,55 @@ do_install_or_update() {
     "${LIBEXEC}/services" \
     "${LIBEXEC}/lib"
 
-  cp -f "${SCRIPTS}/lib/nlt-common.sh" "${LIBEXEC}/lib/nlt-common.sh"
-  chmod 0755 "${LIBEXEC}/lib/nlt-common.sh"
+  _nlt_cp_first "${LIBEXEC}/lib/nlt-common.sh" \
+    "${SCRIPTS}/lib/nlt-common.sh" \
+    "${SCRIPTS}/_lib/nlt-common.sh"
 
-  cp -f "${SCRIPTS}/tools/pip-sources/setup.sh" "${LIBEXEC}/pip-sources/setup.sh"
-  chmod 0755 "${LIBEXEC}/pip-sources/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/pip-sources/setup.sh" \
+    "${SCRIPTS}/tools/pip-sources/setup.sh" \
+    "${SCRIPTS}/pip-sources/setup.sh"
 
-  cp -f "${SCRIPTS}/tools/python-env/setup.sh" "${LIBEXEC}/python-env/setup.sh"
-  chmod 0755 "${LIBEXEC}/python-env/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/python-env/setup.sh" \
+    "${SCRIPTS}/tools/python-env/setup.sh" \
+    "${SCRIPTS}/python-env/setup.sh"
 
-  cp -f "${SCRIPTS}/services/airflow/setup.sh" "${LIBEXEC}/airflow/setup.sh"
-  chmod 0755 "${LIBEXEC}/airflow/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/airflow/setup.sh" \
+    "${SCRIPTS}/services/airflow/setup.sh" \
+    "${SCRIPTS}/airflow/setup.sh"
 
-  cp -f "${SCRIPTS}/services/celery/setup.sh" "${LIBEXEC}/celery/setup.sh"
-  chmod 0755 "${LIBEXEC}/celery/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/celery/setup.sh" \
+    "${SCRIPTS}/services/celery/setup.sh" \
+    "${SCRIPTS}/celery/setup.sh" \
+    "${SCRIPTS}/celery/celery-setup.sh"
 
-  cp -f "${SCRIPTS}/tools/utils/setup.sh" "${LIBEXEC}/utils/setup.sh"
-  chmod 0755 "${LIBEXEC}/utils/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/utils/setup.sh" \
+    "${SCRIPTS}/tools/utils/setup.sh" \
+    "${SCRIPTS}/utils/setup.sh" \
+    "${SCRIPTS}/utils/utils-setup.sh"
 
-  cp -f "${SCRIPTS}/tools/github-net/setup.sh" "${LIBEXEC}/github-net/setup.sh"
-  chmod 0755 "${LIBEXEC}/github-net/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/github-net/setup.sh" \
+    "${SCRIPTS}/tools/github-net/setup.sh" \
+    "${SCRIPTS}/github-net/setup.sh"
 
-  cp -f "${SCRIPTS}/services/paperclip/setup.sh" "${LIBEXEC}/paperclip/setup.sh"
-  chmod 0755 "${LIBEXEC}/paperclip/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/paperclip/setup.sh" \
+    "${SCRIPTS}/services/paperclip/setup.sh" \
+    "${SCRIPTS}/paperclip/setup.sh" \
+    "${SCRIPTS}/paperclip/paperclip-setup.sh"
 
-  cp -f "${SCRIPTS}/services/code-server/setup.sh" "${LIBEXEC}/code-server/setup.sh"
-  chmod 0755 "${LIBEXEC}/code-server/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/code-server/setup.sh" \
+    "${SCRIPTS}/services/code-server/setup.sh" \
+    "${SCRIPTS}/code-server/setup.sh" \
+    "${SCRIPTS}/code-server/code-server-setup.sh"
 
-  cp -f "${SCRIPTS}/services/new-api/setup.sh" "${LIBEXEC}/new-api/setup.sh"
-  chmod 0755 "${LIBEXEC}/new-api/setup.sh"
+  _nlt_cp_first "${LIBEXEC}/new-api/setup.sh" \
+    "${SCRIPTS}/services/new-api/setup.sh" \
+    "${SCRIPTS}/new-api/setup.sh" \
+    "${SCRIPTS}/new-api/new-api-setup.sh"
 
-  cp -f "${SCRIPTS}/services/nlt-services.sh" "${LIBEXEC}/services/nlt-services.sh"
-  chmod 0755 "${LIBEXEC}/services/nlt-services.sh"
+  _nlt_cp_first "${LIBEXEC}/services/nlt-services.sh" \
+    "${SCRIPTS}/services/nlt-services.sh" \
+    "${SCRIPTS}/services/services.sh" \
+    "${SCRIPTS}/10-services/services.sh"
 
   _emit_wrapper nlt-pip-sources pip-sources/setup.sh
   _emit_wrapper nlt-python-env python-env/setup.sh

@@ -69,6 +69,7 @@ export PATH="$HOME/.local/nltdeploy/bin:$PATH"
 - **`NLTDEPLOY_SKIP_PROFILE_HINT=1`**：不自动写入 shell 配置、不打印上述 PATH 说明（适合 CI；`tests/install_smoke.sh` 已默认设置）。
 - **`NLTDEPLOY_UNINSTALL_YES=1`**：`install.sh uninstall` 在非 TTY 下跳过确认（与删除 `NLTDEPLOY_ROOT` 配合使用）。
 - **`NLTDEPLOY_SKIP_GIT_PULL=1`**：不执行 `git pull`，仍按当前工作区/已克隆内容同步 `libexec` 与 `bin`。
+- **`NLTDEPLOY_GIT_CLONE_REF`**：（可选）管道安装时 `git clone` 使用的分支或 tag。若 raw 地址使用 **`master`** 而仓库默认分支是 **`main`**，请同时设 `NLTDEPLOY_GIT_CLONE_REF=master`，或改用 raw 的 **`HEAD`**（与默认分支一致）。`install.sh` 内复制路径已对旧版 `scripts/_lib`、扁平目录与 `tools/` / `services/` 布局做兼容。
 - **`NLTDEPLOY_GITHUB_REPO` / `NLTDEPLOY_GITEE_REPO` / `NLTDEPLOY_SRC_DIR`**：管道安装时的克隆源与目录（见上节）。
 
 本地验证安装逻辑：
