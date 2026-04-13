@@ -27,6 +27,7 @@ usage() {
   NLTDEPLOY_ROOT              安装根目录（默认 ~/.local/nltdeploy）
   NLTDEPLOY_SKIP_GIT_PULL     设为 1 时不执行 git pull（仍同步文件）
   NLTDEPLOY_SKIP_PROFILE_HINT 设为 1 时不写入 PATH、不打印 PATH 说明（适合 CI）
+  NLTDEPLOY_AUTO_EXEC_ZSH_AFTER_INSTALL  默认 1：安装结束且为交互 TTY、且检测到由 zsh 启动本脚本时，执行 exec zsh -l 以加载 ~/.zshrc（无法改父进程环境时的折中）。设为 0 则只提示手动 source。
   NLTDEPLOY_UNINSTALL_YES     设为 1 时非 TTY 也可执行 uninstall（确认删除）
   NLTDEPLOY_GITHUB_REPO / NLTDEPLOY_GITEE_REPO / NLTDEPLOY_SRC_DIR  见 README
   NLTDEPLOY_GIT_CLONE_REF   管道安装时 git clone 的分支或 tag（可选）。raw 用 …/master/… 而仓库默认分支是 main 时，可设为 master 与脚本版本一致；不设则克隆远程默认分支。
@@ -158,6 +159,40 @@ _nlt_collect_profile_targets() {
   for t in "${out[@]}"; do
     printf '%s\n' "$t"
   done
+}
+
+# 当前进程的父进程命令名是否像 zsh（用于安装后是否 exec zsh -l）
+_nlt_parent_shell_looks_like_zsh() {
+  local c
+  c="$(ps -p "$PPID" -o comm= 2>/dev/null || true)"
+  c="${c##-}"
+  c="${c##*/}"
+  [[ "$c" == *zsh* ]]
+}
+
+# 安装后立即生效：当前 install 进程 PATH + 可选 exec 登录 zsh 以加载 ~/.zshrc
+_nlt_post_install_refresh_shell() {
+  [[ "${NLTDEPLOY_SKIP_PROFILE_HINT:-}" == "1" ]] && return 0
+  local bin
+  bin="$(_nlt_canonical_bin_dir)" || return 0
+  case ":${PATH}:" in
+    *":${bin}:"*) ;;
+    *) export PATH="${bin}:${PATH}" ;;
+  esac
+
+  if
+    [[ "${NLTDEPLOY_AUTO_EXEC_ZSH_AFTER_INSTALL:-1}" == "1" ]] &&
+      [[ -t 1 ]] &&
+      _nlt_parent_shell_looks_like_zsh &&
+      [[ -f "${HOME}/.zshrc" ]] &&
+      command -v zsh >/dev/null 2>&1
+  then
+    echo "检测到由 zsh 启动安装：将 exec zsh -l 以加载 ~/.zshrc（nlt-* 立即可用；exit 回到上一层 shell）。" >&2
+    exec zsh -l
+  fi
+
+  echo "已将 ${bin} 加入当前 shell 的 PATH（本进程内可直接使用 nlt-*）。"
+  echo "新开终端或手动执行: source ~/.zshrc（zsh）或 source ~/.bashrc（bash）"
 }
 
 _nlt_install_path_to_profiles() {
@@ -346,8 +381,9 @@ do_install_or_update() {
     echo "已安装到: ${NLTDEPLOY_ROOT}"
     _nlt_install_path_to_profiles
     echo ""
-    echo "新开终端或执行: source ~/.zshrc   或   source ~/.bashrc"
     echo "若不想自动写入 shell 配置，可设置 NLTDEPLOY_SKIP_PROFILE_HINT=1"
+    echo "若不想安装结束后自动 exec 登录 zsh，可设置 NLTDEPLOY_AUTO_EXEC_ZSH_AFTER_INSTALL=0"
+    _nlt_post_install_refresh_shell
   fi
 }
 

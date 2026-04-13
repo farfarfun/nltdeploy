@@ -8,7 +8,8 @@
 #   ./setup.sh              # gum 菜单
 #   ./setup.sh install      # 克隆/拉取源码并 pnpm install
 #   ./setup.sh update       # git pull + pnpm install
-#   ./setup.sh start        # 后台启动（pnpm paperclipai run）
+#   ./setup.sh start        # 后台启动（pnpm paperclipai run）；无配置时会先非交互生成默认配置
+#   ./setup.sh onboard      # 上游首次配置（NONINTERACTIVE=1 时加 --yes）
 #   ./setup.sh stop / restart / status
 #
 # 环境变量：
@@ -16,7 +17,9 @@
 #   PAPERCLIP_REPO_URL       上游 Git（默认 https://github.com/paperclipai/paperclip.git）
 #   PAPERCLIP_GIT_BRANCH     克隆分支（默认 main）
 #   PAPERCLIP_PORT           监听与健康检查端口（默认 8804；启动时 export PORT 同值）
-#   NONINTERACTIVE=1         跳过 gum 确认
+#   PAPERCLIP_HOME           上游数据根（默认 ~/.paperclip），与官方 CLI 一致
+#   PAPERCLIP_INSTANCE_ID    实例 id（默认 default）
+#   NONINTERACTIVE=1         跳过 gum 确认；onboard 子命令使用 --yes
 #   PAPERCLIP_UNINSTALL_YES=1  非 TTY 卸载确认
 
 set -euo pipefail
@@ -53,14 +56,74 @@ usage() {
 命令:
   install     克隆 ${PAPERCLIP_REPO_URL} 到 ${PAPERCLIP_SRC}（已存在则 fetch 后 checkout 分支）并执行 pnpm install
   update      git pull 后 pnpm install
-  start       后台启动: cd 源码目录 && pnpm paperclipai run（日志 ${LOG_FILE}）
+  start       后台启动: cd 源码目录 && pnpm paperclipai run（日志 ${LOG_FILE}）；若无实例配置则先 onboard --yes
+  onboard     首次配置（交互）；NONINTERACTIVE=1 时执行 onboard --yes
   stop        停止进程
   restart     stop 后 start
   status      PID 与 HTTP 健康检查 http://127.0.0.1:${PAPERCLIP_PORT}/api/health
   uninstall   停止进程并删除 ${PAPERCLIP_SERVICE_HOME}（不可逆，有确认）
 
-说明: 首次运行依赖上游 CLI 自动 onboard；详见 https://github.com/paperclipai/paperclip README。
+说明: 上游在无 ~/.paperclip/.../config.json 且非 TTY 时不会自动 onboard；start 会尝试用 script(1)+onboard --yes 生成配置。
+      若仍失败，请在终端执行: cd ${PAPERCLIP_SRC} && pnpm paperclipai onboard
 USAGE
+}
+
+paperclip_instance_config_json() {
+  local root="${PAPERCLIP_HOME:-${HOME}/.paperclip}"
+  local id="${PAPERCLIP_INSTANCE_ID:-default}"
+  echo "${root}/instances/${id}/config.json"
+}
+
+# 无配置时：在伪终端下执行 onboard --yes；若上游在 onboard 结束后仍常驻监听，在检测到 config 出现后结束该进程
+ensure_paperclip_instance_config() {
+  local cfg
+  cfg="$(paperclip_instance_config_json)"
+  if [[ -f "$cfg" ]]; then
+    return 0
+  fi
+  command -v script >/dev/null 2>&1 || die "缺少 script(1)，无法在无 TTY 下生成配置。请在本机终端执行: cd ${PAPERCLIP_SRC} && pnpm paperclipai onboard"
+
+  echo "==> 未找到实例配置: ${cfg}" >&2
+  echo "==> 正在非交互生成默认配置（pnpm paperclipai onboard --yes）…" >&2
+
+  local op_log
+  op_log="$(mktemp "${TMPDIR:-/tmp}/nlt-paperclip-onboard.XXXXXX")"
+  (
+    cd "${PAPERCLIP_SRC}" || exit 1
+    if script -qec "exit 0" /dev/null 2>/dev/null; then
+      exec script -qec "cd \"${PAPERCLIP_SRC}\" && pnpm paperclipai onboard --yes" /dev/null
+    else
+      exec script -q /dev/null bash -c "cd \"${PAPERCLIP_SRC}\" && pnpm paperclipai onboard --yes"
+    fi
+  ) >>"${op_log}" 2>&1 &
+  local opid=$!
+  local waited=0
+  while (( waited < 180 )); do
+    if [[ -f "$cfg" ]]; then
+      kill "$opid" 2>/dev/null || true
+      wait "$opid" 2>/dev/null || true
+      cat "${op_log}" >>"${LOG_FILE}"
+      rm -f "${op_log}"
+      echo "==> 已生成配置: ${cfg}" >&2
+      return 0
+    fi
+    if ! kill -0 "$opid" 2>/dev/null; then
+      wait "$opid" 2>/dev/null || true
+      break
+    fi
+    sleep 1
+    waited=$((waited + 1))
+  done
+  kill "$opid" 2>/dev/null || true
+  wait "$opid" 2>/dev/null || true
+  cat "${op_log}" >>"${LOG_FILE}"
+  rm -f "${op_log}"
+
+  if [[ -f "$cfg" ]]; then
+    echo "==> 已生成配置: ${cfg}" >&2
+    return 0
+  fi
+  die "仍未生成 ${cfg}。请在**交互终端**执行: cd ${PAPERCLIP_SRC} && pnpm paperclipai onboard   然后重试: $0 start"
 }
 
 ensure_dirs() {
@@ -153,11 +216,25 @@ cmd_update() {
   echo "更新完成。"
 }
 
+cmd_onboard() {
+  require_node
+  ensure_pnpm
+  [[ -d "${PAPERCLIP_SRC}" && -f "${PAPERCLIP_SRC}/package.json" ]] || die "未安装源码，请先: $0 install"
+  pushd "${PAPERCLIP_SRC}" >/dev/null
+  if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
+    pnpm paperclipai onboard --yes "$@"
+  else
+    pnpm paperclipai onboard "$@"
+  fi
+  popd >/dev/null
+}
+
 cmd_start() {
   require_node
   ensure_pnpm
   [[ -d "${PAPERCLIP_SRC}" && -f "${PAPERCLIP_SRC}/package.json" ]] || die "未安装源码，请先: $0 install"
   ensure_dirs
+  ensure_paperclip_instance_config
   local existing
   existing="$(read_pid)"
   if [[ -n "$existing" ]] && process_alive "$existing"; then
@@ -259,6 +336,7 @@ dispatch() {
   case "$cmd" in
     install) cmd_install ;;
     update) cmd_update ;;
+    onboard) cmd_onboard "$@" ;;
     start) cmd_start ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
@@ -281,7 +359,7 @@ interactive_main() {
   while true; do
     local pick
     pick="$(gum choose --header "选择操作（取消退出）" \
-      "install" "update" "start" "stop" "restart" "status" "uninstall" "help" "quit")" || break
+      "install" "update" "onboard" "start" "stop" "restart" "status" "uninstall" "help" "quit")" || break
     [[ -z "$pick" ]] && break
     case "$pick" in
       quit) break ;;

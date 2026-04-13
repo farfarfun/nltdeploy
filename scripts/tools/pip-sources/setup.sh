@@ -1,9 +1,15 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # 自动配置 pip 源的脚本
 # 检测网络连通性并配置常用的 pip 镜像源
+#
+# 须用 bash 运行；若使用「sh setup.sh」，POSIX sh 无进程替换等特性，会自动改由 bash 重新执行。
 
-set -e  # 遇到错误立即退出
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec /usr/bin/env bash "$0" "$@"
+fi
+
+set -euo pipefail
 
 _PSDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if [[ -f "${_PSDIR}/../lib/nlt-common.sh" ]]; then
@@ -53,6 +59,33 @@ get_pip_source_info() {
     esac
 }
 
+# 与 get_pip_source_info 中预定义源顺序一致（避免 sed 解析函数体）
+PIP_PREDEFINED_SOURCES=(
+    tsinghua aliyun douban tencent huawei ustc bfsu sjtu hust
+    artlab-visable artlab-pai artlab-aop tbsite tbsite_aliyun antfin official
+)
+
+# 根据源根 URL 构造「包索引页」URL（供延迟/测速共用）
+build_package_index_url() {
+    local source_url="$1"
+    local package_name="$2"
+    local base_url package_url
+
+    if [[ "$source_url" =~ /simple/?$ ]] || [[ "$source_url" =~ /simple/ ]]; then
+        base_url="${source_url%/}"
+        [[ "$base_url" =~ /simple/?$ ]] || base_url="${base_url}/simple"
+        base_url="${base_url%/}/"
+        package_url="${base_url}${package_name}/"
+    elif [[ "$source_url" =~ /pypi/ ]]; then
+        package_url="${source_url%/}/${package_name}/"
+    elif [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
+        package_url="${source_url%/}/${package_name}/"
+    else
+        package_url="${source_url%/}/simple/${package_name}/"
+    fi
+    printf '%s\n' "$package_url"
+}
+
 # 获取源的 URL（支持自定义源）
 get_pip_source_url() {
     local source_name=$1
@@ -99,69 +132,23 @@ get_source_display_name() {
     echo "$info" | LC_ALL=C cut -d'|' -f2
 }
 
-# 从 get_pip_source_info 函数中提取所有源名称
-get_all_source_names() {
-    local source_names=()
-    # 获取脚本文件路径（优先使用 BASH_SOURCE[0]，否则使用 $0）
-    local script_file="${BASH_SOURCE[0]:-$0}"
-    
-    # 如果是相对路径，尝试转换为绝对路径
-    if [ ! -f "$script_file" ] && [ -f "./$(basename "$script_file")" ]; then
-        script_file="./$(basename "$script_file")"
-    fi
-    
-    # 从脚本文件中提取 get_pip_source_info 函数的 case 分支
-    if [ -f "$script_file" ]; then
-        # 使用 sed 和 grep 提取 case 分支中的源名称
-        # 提取从 get_pip_source_info() 到 } 之间的内容，然后匹配 case 分支模式
-        while IFS= read -r line; do
-            # 匹配 case 分支：源名) echo "..."
-            if [[ "$line" =~ ^[[:space:]]+([a-zA-Z0-9_-]+)\) ]]; then
-                local source_name="${BASH_REMATCH[1]}"
-                # 排除 *) 通配符分支
-                if [ "$source_name" != "*" ]; then
-                    source_names+=("$source_name")
-                fi
-            fi
-        done < <(sed -n '/^get_pip_source_info()/,/^}/p' "$script_file" 2>/dev/null | grep -E '^\s+[a-zA-Z0-9_-]+\)')
-    else
-        # 如果无法从文件读取（通过管道执行），尝试从函数定义中提取
-        # 使用 declare -f 获取函数定义（更可靠）
-        local func_def=""
-        if command -v declare &> /dev/null; then
-            func_def=$(declare -f get_pip_source_info 2>/dev/null)
-        elif command -v type &> /dev/null; then
-            func_def=$(type get_pip_source_info 2>/dev/null)
-        fi
-        
-        if [ -n "$func_def" ]; then
-            while IFS= read -r line; do
-                # 匹配 case 分支：源名) echo "..."
-                if [[ "$line" =~ ^[[:space:]]+([a-zA-Z0-9_-]+)\) ]]; then
-                    local source_name="${BASH_REMATCH[1]}"
-                    # 排除 *) 通配符分支
-                    if [ "$source_name" != "*" ]; then
-                        source_names+=("$source_name")
-                    fi
-                fi
-            done <<< "$func_def"
-        fi
-    fi
-    
-    # 如果解析失败，返回空数组
-    echo "${source_names[@]}"
-}
-
-# 初始化所有支持的源名称列表（从 get_pip_source_info 自动提取）
-PIP_SOURCE_NAMES=($(get_all_source_names))
+PIP_SOURCE_NAMES=("${PIP_PREDEFINED_SOURCES[@]}")
+CUSTOM_SOURCES=()
 
 # 命令行参数
-SELECTED_SOURCE=""
+SELECTED_SOURCE="${SELECTED_SOURCE:-}"
 SHOW_HELP=false
-TEST_TIMEOUT=10  # 网络测试超时时间（秒）
-VERBOSE=true     # 详细模式，显示检测详情（默认开启）
-TEST_PACKAGE="setuptools"  # 用于测试下载速度的包名（常用且较小的包）
-TEST_WHEEL_SIZE=0  # 测试下载的wheel文件大小（字节），0表示自动检测
+# 整次请求上限（秒）；慢网或不稳定可设 PIP_SOURCES_TEST_TIMEOUT=10
+TEST_TIMEOUT="${PIP_SOURCES_TEST_TIMEOUT:-5}"
+# TCP/TLS 连接阶段上限（秒）；不可达主机尽快失败，避免多源顺序探测拖很久
+CONNECT_TIMEOUT="${PIP_SOURCES_CONNECT_TIMEOUT:-2}"
+VERBOSE=false    # 详细模式（-v / --verbose 打开）
+TEST_PACKAGE="setuptools"  # 用于延迟/测速的包索引页（常用、索引小）
+TEST_WHEEL_SIZE=0  # 保留兼容，未使用
+# 设为 1 时对每个源做 wheel 下载速度测试（慢）；默认仅 HTTP 延迟，足够排序
+PIP_SOURCES_SPEED_TEST="${PIP_SOURCES_SPEED_TEST:-0}"
+# 并行探测源数量（默认 8）；设为 1 完全顺序。wheel 实测时强制为 1，避免多路抢带宽
+PIP_SOURCES_PARALLEL_JOBS="${PIP_SOURCES_PARALLEL_JOBS:-8}"
 
 # 检测是否可以交互
 if [ "${NONINTERACTIVE:-}" = "1" ]; then
@@ -197,12 +184,19 @@ show_help() {
 用法: $0 [选项]
 
 选项:
-  -v, --verbose          详细模式，显示网络检测的详细信息（默认开启）
+  -v, --verbose          详细模式，打印每条检测 URL / HTTP 码等
   -h, --help             显示此帮助信息
 
+环境变量:
+  PIP_SOURCES_SPEED_TEST=1       对每个源做 wheel 下载测速（慢）；默认仅测延迟
+  PIP_SOURCES_TEST_TIMEOUT=秒数    单次 curl 总超时，默认 5；慢网可加大
+  PIP_SOURCES_CONNECT_TIMEOUT=秒数 连接阶段超时，默认 2
+  PIP_SOURCES_PARALLEL_JOBS=N      并行探测源个数，默认 8；设为 1 则顺序执行
+                                   （PIP_SOURCES_SPEED_TEST=1 时始终顺序）
+
 说明:
-  脚本会自动检测所有可用的 pip 源，测试下载速度，并按速度排序配置。
-  能下载到测试包或能响应的源作为主源，网络不可用或延迟N/A的源不会加入配置。
+  脚本会检测各 pip 源连通性，默认按包索引页延迟排序；可选开启完整下载测速。
+  能响应的源会写入配置，不可用源写入注释备忘。
 
 支持的 pip 源:
   tsinghua      - 清华大学镜像源 (https://pypi.tuna.tsinghua.edu.cn/simple/)
@@ -223,9 +217,10 @@ show_help() {
   official      - 官方源 (https://pypi.org/simple)
 
 示例:
-  $0                      # 自动检测并配置所有可用源（按速度排序）
-  $0 -v                   # 详细模式，显示检测详情
-  NONINTERACTIVE=1 $0     # 非交互模式，自动配置
+  $0                      # 自动检测并配置（默认按延迟排序，较快）
+  PIP_SOURCES_SPEED_TEST=1 $0   # 按实际下载速度排序（较慢）
+  $0 -v                   # 详细调试输出
+  NONINTERACTIVE=1 $0     # 非交互（gum 菜单仍可能拉取安装 gum）
 
 通过 curl 执行:
   curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/tools/pip-sources/setup.sh | bash
@@ -288,7 +283,7 @@ check_network() {
         # 1. 先尝试 GET 请求到 /simple/ 路径（更可靠）
         # 2. 允许重定向（-L）
         # 3. 只要能够连接并返回内容即可（不要求必须是 200）
-        local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$test_url" 2>/dev/null)
+        local http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "$test_url" 2>/dev/null)
         
         if [ "$VERBOSE" = "true" ]; then
             print_debug "HTTP 状态码: $http_code"
@@ -306,7 +301,7 @@ check_network() {
         # 因为某些源可能对直接访问有限制，但 pip 使用时是正常的
         if [ "$is_authenticated" = "true" ] && [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
             # 检查是否能真正建立连接（通过检查响应头）
-            local response_headers=$(curl -s -I --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" 2>/dev/null | head -1)
+            local response_headers=$(curl -s -I --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" "$test_url" 2>/dev/null | head -1)
             if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
                 if [ "$VERBOSE" = "true" ]; then
                     print_debug "$name 检测成功（带认证源，HTTP 状态码: $http_code，但能建立连接）"
@@ -316,7 +311,7 @@ check_network() {
         fi
         
         # 如果上面的方法失败，尝试更宽松的方式：只要能够连接就行
-        if curl -s --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" &> /dev/null; then
+        if curl -s --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" "$test_url" &> /dev/null; then
             if [ "$VERBOSE" = "true" ]; then
                 print_debug "$name 检测成功（通过连接测试）"
             fi
@@ -353,33 +348,12 @@ test_package_latency() {
         return 1
     fi
     
-    # 根据源 URL 格式构建包 URL
-    local package_url=""
-    
-    # 检查是否是标准 /simple/ 格式
-    if [[ "$source_url" =~ /simple/?$ ]] || [[ "$source_url" =~ /simple/ ]]; then
-        # 标准格式：https://xxx.com/simple/ -> https://xxx.com/simple/package_name/
-        local base_url="${source_url%/}"
-        if [[ ! "$base_url" =~ /simple/?$ ]]; then
-            base_url="${base_url}/simple"
-        fi
-        base_url="${base_url%/}/"
-        package_url="${base_url}${package_name}/"
-    elif [[ "$source_url" =~ /pypi/ ]]; then
-        # 非标准格式（如 artlab-visable、artlab-pai、artlab-aop）：http://xxx.com/pypi/xxx -> http://xxx.com/pypi/xxx/package_name/
-        package_url="${source_url%/}/${package_name}/"
-    elif [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
-        # 自定义路径格式（如 https://user:pass@host.com/path/to/pypi/funpy）
-        # 保持原始路径结构，在末尾添加包名
-        package_url="${source_url%/}/${package_name}/"
-    else
-        # 其他格式，尝试添加 /simple/
-        package_url="${source_url%/}/simple/${package_name}/"
-    fi
-    
+    local package_url
+    package_url="$(build_package_index_url "$source_url" "$package_name")"
+
     # 方法1: 尝试获取包的索引页面（HTML页面，通常较小）
     local start_time=$(date +%s%N)
-    local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null)
+    local http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null)
     local end_time=$(date +%s%N)
     
     # 如果索引页面可用（200-399），计算延迟
@@ -392,7 +366,7 @@ test_package_latency() {
     # 方法2: 如果索引页面不可用，尝试 JSON API（某些源支持）
     local json_url="${package_url%/}/json"
     start_time=$(date +%s%N)
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$json_url" 2>/dev/null)
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "$json_url" 2>/dev/null)
     end_time=$(date +%s%N)
     
     if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
@@ -404,7 +378,7 @@ test_package_latency() {
     # 方法3: 对于非标准源，尝试直接访问源根目录测试连通性
     if [[ "$source_url" =~ /pypi/ ]]; then
         start_time=$(date +%s%N)
-        http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "${source_url%/}/" 2>/dev/null)
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "${source_url%/}/" 2>/dev/null)
         end_time=$(date +%s%N)
         
         if [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
@@ -429,30 +403,12 @@ test_package_download_speed() {
         return 1
     fi
     
-    # 根据源 URL 格式构建包 URL
-    local package_url=""
-    
-    # 检查是否是标准 /simple/ 格式
-    if [[ "$source_url" =~ /simple/?$ ]] || [[ "$source_url" =~ /simple/ ]]; then
-        local base_url="${source_url%/}"
-        if [[ ! "$base_url" =~ /simple/?$ ]]; then
-            base_url="${base_url}/simple"
-        fi
-        base_url="${base_url%/}/"
-        package_url="${base_url}${package_name}/"
-    elif [[ "$source_url" =~ /pypi/ ]]; then
-        package_url="${source_url%/}/${package_name}/"
-    elif [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
-        # 自定义路径格式（如 https://user:pass@host.com/path/to/pypi/funpy）
-        # 保持原始路径结构，在末尾添加包名
-        package_url="${source_url%/}/${package_name}/"
-    else
-        package_url="${source_url%/}/simple/${package_name}/"
-    fi
-    
+    local package_url
+    package_url="$(build_package_index_url "$source_url" "$package_name")"
+
     # 尝试从包的索引页面中找到一个小的wheel文件来下载
     # 先获取包的索引页面
-    local index_content=$(curl -s --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null)
+    local index_content=$(curl -s --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null)
     if [ -z "$index_content" ]; then
         echo "0"
         return 1
@@ -474,7 +430,7 @@ test_package_download_speed() {
             fi
             
             # 尝试获取文件大小（HEAD请求）
-            local file_size=$(curl -s -I --max-time 5 -L "$wheel_url" 2>/dev/null | grep -i "content-length" | awk '{print $2}' | tr -d '\r\n')
+            local file_size=$(curl -s -I --connect-timeout "$CONNECT_TIMEOUT" --max-time 5 -L "$wheel_url" 2>/dev/null | grep -i "content-length" | awk '{print $2}' | tr -d '\r\n')
             if [ -n "$file_size" ] && [ "$file_size" -gt 0 ] && [ "$file_size" -lt 5000000 ] && [ "$file_size" -lt "$smallest_size" ]; then
                 smallest_size=$file_size
                 # 如果找到小于1MB的文件，就使用它
@@ -489,7 +445,7 @@ test_package_download_speed() {
     if [ -z "$wheel_url" ] || [ "$smallest_size" -eq 999999999 ]; then
         # 下载索引页面测试速度
         local start_time=$(date +%s%N)
-        local downloaded_bytes=$(curl -s --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null | wc -c)
+        local downloaded_bytes=$(curl -s --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "$package_url" 2>/dev/null | wc -c)
         local end_time=$(date +%s%N)
         
         if [ "$downloaded_bytes" -gt 0 ]; then
@@ -509,7 +465,7 @@ test_package_download_speed() {
     
     # 下载wheel文件测试速度
     local start_time=$(date +%s%N)
-    local downloaded_bytes=$(curl -s --max-time "$TEST_TIMEOUT" -L "$wheel_url" 2>/dev/null | wc -c)
+    local downloaded_bytes=$(curl -s --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "$wheel_url" 2>/dev/null | wc -c)
     local end_time=$(date +%s%N)
     
     if [ "$downloaded_bytes" -gt 0 ]; then
@@ -528,99 +484,144 @@ test_package_download_speed() {
     return 1
 }
 
+# 探测单个源；向 stdout 输出两行：PRIMARY|…（可无正文）与 ALL|…（供并行合并）
+__nlt_pip_probe_one_source() {
+    local source_name=$1
+    local source_url display_name latency download_speed test_url start_time end_time http_code is_authenticated response_headers
+    local primary_line=""
+    local all_line=""
+
+    source_url=$(get_pip_source_url "$source_name")
+    display_name=$(get_source_display_name "$source_name")
+
+    if check_network "$source_url" "$display_name"; then
+        # 避免 test_package_latency 返回非零时在 set -e 下中断（含后台并行）
+        latency=$(test_package_latency "$source_url" "$TEST_PACKAGE" 2>/dev/null) || true
+        download_speed="0"
+        if [[ "${PIP_SOURCES_SPEED_TEST}" == "1" ]]; then
+            download_speed=$(test_package_download_speed "$source_url" "$TEST_PACKAGE" 2>/dev/null || echo "0")
+        fi
+
+        if [ "$latency" = "999999" ] || [ "$latency" -ge 999999 ] 2>/dev/null; then
+            test_url="$source_url"
+            if [[ "$source_url" =~ @ ]] || [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
+                test_url="${source_url%/}/"
+            elif [[ ! "$test_url" =~ /simple/?$ ]]; then
+                if [[ "$test_url" =~ /pypi/ ]]; then
+                    test_url="${test_url%/}/"
+                else
+                    test_url="${test_url%/}/simple/"
+                fi
+            fi
+
+            start_time=$(date +%s%N)
+            http_code=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" -L "$test_url" 2>/dev/null)
+            end_time=$(date +%s%N)
+
+            is_authenticated=false
+            if [[ "$source_url" =~ @ ]]; then
+                is_authenticated=true
+            fi
+
+            if [ "$is_authenticated" = "true" ] && [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
+                response_headers=$(curl -s -I --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" "$test_url" 2>/dev/null | head -1)
+                if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
+                    latency=$(( (end_time - start_time) / 1000000 ))
+                    primary_line="${source_name}|${latency}|${download_speed}|0"
+                    all_line="${source_name}|${latency}|${download_speed}|可用|补充"
+                else
+                    all_line="${source_name}|N/A|0.00|不可用|-"
+                fi
+            elif [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
+                latency=$(( (end_time - start_time) / 1000000 ))
+                primary_line="${source_name}|${latency}|${download_speed}|0"
+                all_line="${source_name}|${latency}|${download_speed}|可用|补充"
+            elif [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
+                response_headers=$(curl -s -I --connect-timeout "$CONNECT_TIMEOUT" --max-time "$TEST_TIMEOUT" "$test_url" 2>/dev/null | head -1)
+                if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
+                    latency=$(( (end_time - start_time) / 1000000 ))
+                    primary_line="${source_name}|${latency}|${download_speed}|0"
+                    all_line="${source_name}|${latency}|${download_speed}|可用|补充"
+                else
+                    all_line="${source_name}|N/A|0.00|不可用|-"
+                fi
+            else
+                all_line="${source_name}|N/A|0.00|不可用|-"
+            fi
+        else
+            primary_line="${source_name}|${latency}|${download_speed}|1"
+            all_line="${source_name}|${latency}|${download_speed}|可用|主源"
+        fi
+    else
+        all_line="${source_name}|N/A|0.00|不可用|-"
+    fi
+
+    printf 'PRIMARY|%s\n' "$primary_line"
+    printf 'ALL|%s\n' "$all_line"
+    return 0
+}
+
 
 # 测试所有源的连通性、下载速度并排序
 test_all_sources() {
-    print_info "正在测试所有 pip 源的连通性和下载速度..."
-    
-    # 存储源信息：格式为 "源名|速度|是否可用|是否有包"
+    if [[ "${PIP_SOURCES_SPEED_TEST}" == "1" ]]; then
+        print_info "正在测试所有 pip 源（连通性 + 延迟 + wheel 下载速度，顺序执行）…"
+    elif [[ "${PIP_SOURCES_PARALLEL_JOBS:-8}" -le 1 ]]; then
+        print_info "正在测试所有 pip 源（连通性 + 包索引延迟；顺序执行）…"
+    else
+        print_info "正在测试所有 pip 源（连通性 + 包索引延迟；最多 ${PIP_SOURCES_PARALLEL_JOBS} 路并行）…"
+    fi
+
     local source_info=()
-    local primary_sources=()  # 能下载到包或能响应的主源
-    local all_test_results=()  # 所有检测结果（包括不可用的）
-    
-    for source_name in "${PIP_SOURCE_NAMES[@]}"; do
-        local source_url=$(get_pip_source_url "$source_name")
-        local display_name=$(get_source_display_name "$source_name")
-        
-        if check_network "$source_url" "$display_name"; then
-            # 测试包的响应延迟
-            local latency=$(test_package_latency "$source_url" "$TEST_PACKAGE" 2>/dev/null)
-            
-            # 测试包的下载速度（MB/s）
-            local download_speed=$(test_package_download_speed "$source_url" "$TEST_PACKAGE" 2>/dev/null)
-            
-            # 如果无法下载包，至少测试源的响应时间
-            if [ "$latency" = "999999" ] || [ "$latency" -ge 999999 ] 2>/dev/null; then
-                # 测试源的响应时间（通过访问源 URL 本身）
-                # 对于自定义路径的源（包含 @ 或已有明确路径），直接使用原始 URL
-                local test_url="$source_url"
-                if [[ "$source_url" =~ @ ]] || [[ "$source_url" =~ /[^/]+/[^/]+ ]] && [[ ! "$source_url" =~ /simple/?$ ]]; then
-                    # 自定义源或已有明确路径的源，直接使用原始 URL（可能需要在末尾加 /）
-                    test_url="${source_url%/}/"
-                elif [[ ! "$test_url" =~ /simple/?$ ]]; then
-                    if [[ "$test_url" =~ /pypi/ ]]; then
-                        test_url="${test_url%/}/"
-                    else
-                        test_url="${test_url%/}/simple/"
-                    fi
-                fi
-                
-                local start_time=$(date +%s%N)
-                local http_code=$(curl -s -o /dev/null -w "%{http_code}" --max-time "$TEST_TIMEOUT" -L "$test_url" 2>/dev/null)
-                local end_time=$(date +%s%N)
-                
-                # 检查是否是带认证信息的源
-                local is_authenticated=false
-                if [[ "$source_url" =~ @ ]]; then
-                    is_authenticated=true
-                fi
-                
-                # 对于带认证信息的源，即使返回 400-499，只要能建立连接也认为可用
-                if [ "$is_authenticated" = "true" ] && [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
-                    # 检查是否能真正建立连接（通过检查响应头）
-                    local response_headers=$(curl -s -I --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" 2>/dev/null | head -1)
-                    if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
-                        latency=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
-                        # 带认证的源即使返回 400，但能建立连接，也作为主源
-                        primary_sources+=("${source_name}|${latency}|${download_speed}|0")
-                        all_test_results+=("${source_name}|${latency}|${download_speed}|可用|补充")
-                    else
-                        # 完全无法访问，不加入补充列表，只记录为不可用
-                        all_test_results+=("${source_name}|N/A|0.00|不可用|-")
-                    fi
-                elif [ -n "$http_code" ] && [ "$http_code" -ge 200 ] && [ "$http_code" -lt 400 ]; then
-                    latency=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
-                    # 即使无法下载包，但能响应，也作为主源，但标记为补充
-                    primary_sources+=("${source_name}|${latency}|${download_speed}|0")
-                    all_test_results+=("${source_name}|${latency}|${download_speed}|可用|补充")
-                elif [ -n "$http_code" ] && [ "$http_code" -ge 400 ] && [ "$http_code" -lt 500 ]; then
-                    # 返回 400-499 的源，如果能通过 check_network（说明能建立连接），也认为可用
-                    # 因为某些源可能对直接访问有限制，但 pip 使用时是正常的
-                    local response_headers=$(curl -s -I --max-time "$TEST_TIMEOUT" --connect-timeout 3 "$test_url" 2>/dev/null | head -1)
-                    if [ -n "$response_headers" ] && [[ "$response_headers" =~ HTTP ]]; then
-                        latency=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
-                        # 能建立连接，即使返回 400-499，也作为主源
-                        primary_sources+=("${source_name}|${latency}|${download_speed}|0")
-                        all_test_results+=("${source_name}|${latency}|${download_speed}|可用|补充")
-                    else
-                        # 完全无法访问，不加入补充列表，只记录为不可用
-                        all_test_results+=("${source_name}|N/A|0.00|不可用|-")
-                    fi
-                else
-                    # 完全无法访问，不加入补充列表，只记录为不可用
-                    all_test_results+=("${source_name}|N/A|0.00|不可用|-")
-                fi
-            else
-                # 能下载到包，是主源
-                primary_sources+=("${source_name}|${latency}|${download_speed}|1")
-                all_test_results+=("${source_name}|${latency}|${download_speed}|可用|主源")
+    local primary_sources=()
+    local all_test_results=()
+
+    local parallel_jobs="${PIP_SOURCES_PARALLEL_JOBS:-8}"
+    if [[ "${PIP_SOURCES_SPEED_TEST}" == "1" ]] || [[ "$parallel_jobs" -le 1 ]]; then
+        parallel_jobs=1
+    fi
+
+    if [[ "$parallel_jobs" -le 1 ]]; then
+        local _pair_tmp pl al
+        _pair_tmp="$(mktemp "${TMPDIR:-/tmp}/nlt-pip-pair.XXXXXX")"
+        for source_name in "${PIP_SOURCE_NAMES[@]}"; do
+            __nlt_pip_probe_one_source "$source_name" > "$_pair_tmp"
+            {
+                IFS= read -r pl
+                IFS= read -r al
+            } < "$_pair_tmp"
+            if [[ -n "${pl#PRIMARY|}" ]]; then
+                primary_sources+=("${pl#PRIMARY|}")
             fi
-        else
-            # 网络不可用，不加入补充列表
-            all_test_results+=("${source_name}|N/A|0.00|不可用|-")
-        fi
-    done
-    
+            all_test_results+=("${al#ALL|}")
+        done
+        rm -f "$_pair_tmp"
+    else
+        local _probe_dir out_i j pl al
+        _probe_dir="$(mktemp -d "${TMPDIR:-/tmp}/nlt-pip-probe.XXXXXX")"
+        out_i=0
+        for source_name in "${PIP_SOURCE_NAMES[@]}"; do
+            __nlt_pip_probe_one_source "$source_name" > "$_probe_dir/$out_i.out" &
+            ((out_i++)) || true
+            if (( out_i % parallel_jobs == 0 )); then
+                wait || true
+            fi
+        done
+        wait || true
+        for ((j = 0; j < out_i; j++)); do
+            [[ -f "$_probe_dir/$j.out" ]] || continue
+            {
+                IFS= read -r pl
+                IFS= read -r al
+            } < "$_probe_dir/$j.out"
+            if [[ -n "${pl#PRIMARY|}" ]]; then
+                primary_sources+=("${pl#PRIMARY|}")
+            fi
+            all_test_results+=("${al#ALL|}")
+        done
+        rm -rf "$_probe_dir"
+    fi
+
     if [ ${#primary_sources[@]} -eq 0 ]; then
         print_error "所有 pip 源都不可用，请检查网络连接"
         exit 1
@@ -628,73 +629,47 @@ test_all_sources() {
     
     # 对主源按下载速度排序（从大到小），下载速度为 N/A 的放到后面
     if [ ${#primary_sources[@]} -gt 0 ]; then
-        # 使用简单的冒泡排序（兼容性更好）
-        local sorted_primary=()
+        local sorted_lines=()
         local temp_array=("${primary_sources[@]}")
-        
-        # 提取信息并准备排序（使用 LC_ALL=C 避免字符编码问题）
-        # 格式：源名|延迟|下载速度|是否有包
-        # 排序键：有速度的源用速度值（负数，用于从大到小排序），N/A 的用延迟值（正数，放到后面）
+
         for i in "${!temp_array[@]}"; do
-            local source=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f1)
-            local latency=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f2)
-            local speed=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f3)
-            local has_pkg=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f4)
-            
-            # 判断是否有有效的下载速度
-            local has_speed=0
-            local sort_key=""
-            
-            # 检查速度是否有效（大于0且不是0或0.00）
+            local source latency speed has_pkg has_speed sort_key speed_check speed_num sort_value latency_num
+            source=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f1)
+            latency=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f2)
+            speed=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f3)
+            has_pkg=$(echo "${temp_array[$i]}" | LC_ALL=C cut -d'|' -f4)
+
+            has_speed=0
+            sort_key=""
             if [ -n "$speed" ] && [ "$speed" != "0" ] && [ "$speed" != "0.00" ] && [ "$speed" != "N/A" ]; then
-                # 使用 awk 检查速度是否大于 0
-                local speed_check=$(echo "$speed" | awk '{if($1>0) print 1; else print 0}' 2>/dev/null)
+                speed_check=$(echo "$speed" | awk '{if($1>0) print 1; else print 0}' 2>/dev/null)
                 if [ "$speed_check" = "1" ]; then
                     has_speed=1
-                    # 有速度的源：使用 (1000 - speed) * 1000 作为排序键（速度越大，排序键越小，排在前面）
-                    # 使用整数格式确保数值比较正确（速度通常在0-100MB/s之间，所以 (1000-speed)*1000 在 0-1000000 之间）
-                    local speed_num=$(echo "$speed" | awk '{print $1}' 2>/dev/null || echo "0")
-                    local sort_value=$(awk "BEGIN {printf \"%.0f\", (1000 - $speed_num) * 1000}" 2>/dev/null || echo "1000000")
+                    speed_num=$(echo "$speed" | awk '{print $1}' 2>/dev/null || echo "0")
+                    sort_value=$(awk "BEGIN {printf \"%.0f\", (1000 - $speed_num) * 1000}" 2>/dev/null || echo "1000000")
                     sort_key=$(awk "BEGIN {printf \"%020d\", $sort_value}" 2>/dev/null || echo "00000000000001000000")
                 fi
             fi
-            
             if [ "$has_speed" = "0" ]; then
-                # 没有速度的源（N/A）：使用延迟值作为排序键，加上一个大的偏移量确保在后面
-                local latency_num=$(echo "$latency" | awk '{print int($1+0.5)}' 2>/dev/null || echo "999999")
-                # 使用固定宽度格式，确保 N/A 的源排序键都大于有速度的源
+                latency_num=$(echo "$latency" | awk '{print int($1+0.5)}' 2>/dev/null || echo "999999")
                 sort_key=$(awk "BEGIN {printf \"%020d\", 2000000 + $latency_num}" 2>/dev/null || echo "2999999")
             fi
-            
-            sorted_primary+=("${sort_key}|${source}|${latency}|${speed}|${has_pkg}")
+            sorted_lines+=("${sort_key}|${source}|${latency}|${speed}|${has_pkg}")
         done
-        
-        # 简单排序（按排序键，从小到大）
-        local n=${#sorted_primary[@]}
-        for ((i=0; i<n-1; i++)); do
-            for ((j=0; j<n-i-1; j++)); do
-                local key1=$(echo "${sorted_primary[$j]}" | LC_ALL=C cut -d'|' -f1)
-                local key2=$(echo "${sorted_primary[$j+1]}" | LC_ALL=C cut -d'|' -f1)
-                # 数值比较（排序键都是整数格式的字符串，可以直接数值比较）
-                local key1_num=$(echo "$key1" | awk '{print int($1)}' 2>/dev/null || echo "9999999")
-                local key2_num=$(echo "$key2" | awk '{print int($1)}' 2>/dev/null || echo "9999999")
-                if [ "$key1_num" -gt "$key2_num" ] 2>/dev/null; then
-                    local temp="${sorted_primary[$j]}"
-                    sorted_primary[$j]="${sorted_primary[$j+1]}"
-                    sorted_primary[$j+1]="$temp"
-                fi
-            done
-        done
-        
-        # 重建主源数组（按下载速度排序，N/A 在后）
+
+        local _ps_sort_tmp
+        _ps_sort_tmp="$(mktemp "${TMPDIR:-/tmp}/nlt-pip-sort.XXXXXX")"
+        printf '%s\n' "${sorted_lines[@]}" | LC_ALL=C sort -t'|' -k1,1 >"$_ps_sort_tmp"
         primary_sources=()
-        for item in "${sorted_primary[@]}"; do
-            local source=$(echo "$item" | LC_ALL=C cut -d'|' -f2)
-            local latency=$(echo "$item" | LC_ALL=C cut -d'|' -f3)
-            local speed=$(echo "$item" | LC_ALL=C cut -d'|' -f4)
-            local has_pkg=$(echo "$item" | LC_ALL=C cut -d'|' -f5)
+        while IFS= read -r item || [[ -n "$item" ]]; do
+            [[ -z "$item" ]] && continue
+            source=$(echo "$item" | LC_ALL=C cut -d'|' -f2)
+            latency=$(echo "$item" | LC_ALL=C cut -d'|' -f3)
+            speed=$(echo "$item" | LC_ALL=C cut -d'|' -f4)
+            has_pkg=$(echo "$item" | LC_ALL=C cut -d'|' -f5)
             primary_sources+=("${source}|${latency}|${speed}|${has_pkg}")
-        done
+        done <"$_ps_sort_tmp"
+        rm -f "$_ps_sort_tmp"
     fi
     
     # 显示检测结果表格
@@ -807,67 +782,6 @@ test_all_sources() {
         fi
     done
     
-    if [ ${#AVAILABLE_SOURCES[@]} -gt 0 ]; then
-        local fastest_source="${AVAILABLE_SOURCES[0]}"
-        local fastest_speed="${SOURCE_SPEEDS[0]}"
-        FASTEST_SOURCE="$fastest_source"
-        print_info "最快的源: $fastest_source (${fastest_speed}ms)"
-    fi
-}
-
-# 测试所有源的连通性并选择最快的（旧版本，保留作为备用）
-test_all_sources_old() {
-    print_info "正在测试所有 pip 源的连通性..."
-    echo ""
-    
-    local available_sources=()
-    local fastest_source=""
-    local fastest_time=999999
-    
-    for source_name in "${PIP_SOURCE_NAMES[@]}"; do
-        local source_url=$(get_pip_source_url "$source_name")
-        local display_name=$(get_source_display_name "$source_name")
-        
-        if check_network "$source_url" "$display_name"; then
-            print_info "✓ $display_name ($source_name) - 可用"
-            available_sources+=("$source_name")
-            
-            # 测试响应时间（使用与检测相同的方法）
-            if command -v curl &> /dev/null; then
-                local test_url="$source_url"
-                if [[ ! "$test_url" =~ /simple/?$ ]]; then
-                    test_url="${source_url%/}/simple/"
-                fi
-                
-                local start_time=$(date +%s%N)
-                curl -s -o /dev/null --max-time "$TEST_TIMEOUT" -L "$test_url" &> /dev/null
-                local end_time=$(date +%s%N)
-                local duration=$(( (end_time - start_time) / 1000000 ))  # 转换为毫秒
-                
-                if [ "$duration" -lt "$fastest_time" ] && [ "$duration" -gt 0 ]; then
-                    fastest_time=$duration
-                    fastest_source="$source_name"
-                fi
-            fi
-        else
-            print_warn "✗ $display_name ($source_name) - 不可用"
-        fi
-    done
-    
-    echo ""
-    
-    if [ ${#available_sources[@]} -eq 0 ]; then
-        print_error "所有 pip 源都不可用，请检查网络连接"
-        exit 1
-    fi
-    
-    if [ -n "$fastest_source" ]; then
-        print_info "检测到最快的源: $fastest_source (响应时间: ${fastest_time}ms)"
-    fi
-    
-    # 返回可用的源列表（通过全局变量）
-    AVAILABLE_SOURCES=("${available_sources[@]}")
-    FASTEST_SOURCE="$fastest_source"
 }
 
 # 从现有配置文件中读取源
@@ -968,46 +882,43 @@ get_custom_source_display_name() {
     fi
 }
 
-# 添加自定义源到检测列表
+# 添加自定义源到检测列表（与预定义 URL 相同的不重复；自定义项一次性插到列表前）
 add_custom_sources_to_list() {
     if [ ${#EXISTING_SOURCES[@]} -eq 0 ]; then
         return 0
     fi
-    
-    print_info "从现有配置中读取到 ${#EXISTING_SOURCES[@]} 个源，正在添加到检测列表..."
-    
-    # 存储自定义源信息：格式为 "标识符|URL|显示名称"
-    local custom_sources=()
-    
+
+    print_info "从现有配置中读取到 ${#EXISTING_SOURCES[@]} 个 URL，正在合并到检测列表…"
+
+    local custom_entries=()
+    local custom_ids=()
+    local url found predefined_name predefined_url source_id display_name
+
     for url in "${EXISTING_SOURCES[@]}"; do
-        # 检查是否已经在预定义源列表中
-        local found=false
-        for predefined_name in "${PIP_SOURCE_NAMES[@]}"; do
-            local predefined_url=$(get_pip_source_url "$predefined_name" 2>/dev/null)
-            if [ "$url" = "$predefined_url" ]; then
+        [[ -z "$url" ]] && continue
+        found=false
+        for predefined_name in "${PIP_PREDEFINED_SOURCES[@]}"; do
+            predefined_url=$(get_pip_source_url "$predefined_name" 2>/dev/null) || true
+            if [[ "$url" == "$predefined_url" ]]; then
                 found=true
                 break
             fi
         done
-        
-        # 如果不在预定义列表中，添加为自定义源
-        if [ "$found" = "false" ] && [ -n "$url" ]; then
-            local source_id=$(generate_custom_source_id "$url")
-            local display_name=$(get_custom_source_display_name "$url")
-            custom_sources+=("${source_id}|${url}|${display_name}")
-            
-            # 添加到源名称列表（放在前面，优先检测，避免丢失）
-            # 重新初始化 PIP_SOURCE_NAMES，包含自定义源
-            PIP_SOURCE_NAMES=($(get_all_source_names))
-            PIP_SOURCE_NAMES=("$source_id" "${PIP_SOURCE_NAMES[@]}")
+        if [[ "$found" == true ]]; then
+            continue
         fi
+        source_id=$(generate_custom_source_id "$url")
+        display_name=$(get_custom_source_display_name "$url")
+        custom_entries+=("${source_id}|${url}|${display_name}")
+        custom_ids+=("$source_id")
     done
-    
-    # 存储自定义源信息到全局变量
-    CUSTOM_SOURCES=("${custom_sources[@]}")
-    
-    if [ ${#custom_sources[@]} -gt 0 ]; then
-        print_info "已添加 ${#custom_sources[@]} 个自定义源到检测列表"
+
+    CUSTOM_SOURCES=("${custom_entries[@]}")
+    if [ ${#custom_ids[@]} -gt 0 ]; then
+        PIP_SOURCE_NAMES=("${custom_ids[@]}" "${PIP_PREDEFINED_SOURCES[@]}")
+        print_info "已加入 ${#custom_ids[@]} 个自定义源（将优先测速）"
+    else
+        PIP_SOURCE_NAMES=("${PIP_PREDEFINED_SOURCES[@]}")
     fi
 }
 
@@ -1051,10 +962,14 @@ backup_config() {
             local backup_files=()
             
             # 使用 ls -t 按修改时间排序（最新的在前），兼容 macOS 和 Linux
-            # 直接使用 ls -t，简单可靠，避免 null 字节问题
+            # 写入临时文件而非 < <(...)，兼容「sh 实为 bash --posix」时禁用进程替换的情况
+            local _ls_tmp
+            _ls_tmp="$(mktemp "${TMPDIR:-/tmp}/nlt-pip-ls.XXXXXX")"
+            ls -t "$PIP_CONFIG_DIR"/"${backup_base}".backup.* 2>/dev/null >"$_ls_tmp" || true
             while IFS= read -r file; do
                 [ -n "$file" ] && [ -f "$file" ] && backup_files+=("$file")
-            done < <(ls -t "$PIP_CONFIG_DIR"/"${backup_base}".backup.* 2>/dev/null || true)
+            done <"$_ls_tmp"
+            rm -f "$_ls_tmp"
             
             # 如果备份文件超过3个，删除最旧的
             local backup_count=${#backup_files[@]}
@@ -1089,7 +1004,7 @@ prepare_multi_source_config() {
         exit 1
     fi
     
-    print_info "将配置 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）"
+    print_info "将配置 ${#AVAILABLE_SOURCES[@]} 个可用源（已按测速结果排序；主源为最快项）"
 }
 
 # 创建配置目录
@@ -1111,9 +1026,9 @@ generate_pip_config_content() {
     
     # 文件头注释
     config_content+="# pip 配置文件\n"
-    config_content+="# 由 configure-pip-sources.sh 自动生成\n"
+    config_content+="# 由 nlt-pip-sources / pip-sources/setup.sh 自动生成\n"
     config_content+="# 生成时间: $(date '+%Y-%m-%d %H:%M:%S')\n"
-    config_content+="# 配置了 ${#AVAILABLE_SOURCES[@]} 个可用源（按下载速度排序）\n"
+    config_content+="# 配置了 ${#AVAILABLE_SOURCES[@]} 个可用源（按测速结果排序）\n"
     if [ ${#UNAVAILABLE_SOURCES[@]} -gt 0 ]; then
         config_content+="# 另有 ${#UNAVAILABLE_SOURCES[@]} 个不可用源已保存到注释中（避免丢失）\n"
     fi

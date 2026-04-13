@@ -10,7 +10,7 @@
 - **celery**：Celery 安装与 worker/beat/flower 启停、状态；默认 `~/opt/celery`。
 - **utils**：安装 **gum**（`~/opt/gum`）与可选 shell 别名（`ll` / `la` / `lla`）。
 - **github-net**：诊断并修复「网页能开但 `git clone` 失败」的常见 HTTPS/SSH 问题。
-- **paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，数据目录见上游 `~/.paperclip/…`。
+- **paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，数据目录见上游 `~/.paperclip/…`。无实例配置时 **`start` 会先非交互执行 `onboard --yes`**（依赖 `script(1)`）；也可手动 **`nlt-paperclip onboard`**（或 `NONINTERACTIVE=1 nlt-paperclip onboard`）。
 - **code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。
 - **new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 3000**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。
 - **services**（`nlt-services.sh`）：**`nlt-services`** 总入口——**`status`** 汇总各常驻服务 PID/端口/HTTP 探测；**`install`** 先选 **安装 / 卸载** 再选模块（或 `install add|remove <模块>`）；卸载不含 celery、utils（上游无 uninstall）。
@@ -55,7 +55,7 @@ curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/install.sh
 - **`NLTDEPLOY_GITEE_REPO`**：默认 `https://gitee.com/farfarfun/nltdeploy.git`
 - **`NLTDEPLOY_SRC_DIR`**：克隆目标目录（默认 `${NLTDEPLOY_ROOT}/src/nltdeploy`）
 
-**配置 PATH：** `install.sh` 结束时会向 **`~/.zshrc` / `~/.bashrc`**（按当前 `SHELL` 与已有文件选择，bash 且无 `.bashrc` 时可能写入 **`~/.bash_profile`**）**自动追加**一段带标记的 `export PATH="…/bin:${PATH}"`。**写入前会校验**：若该文件里已有 nltdeploy 标记块，或正文中已出现同一 bin 目录路径，则**跳过**，避免重复。新开终端生效，或手动 `source` 对应 rc 文件。
+**配置 PATH：** `install.sh` 结束时会向 **`~/.zshrc` / `~/.bashrc`**（按当前 `SHELL` 与已有文件选择，bash 且无 `.bashrc` 时可能写入 **`~/.bash_profile`**）**自动追加**一段带标记的 `export PATH="…/bin:${PATH}"`。**写入前会校验**：若该文件里已有 nltdeploy 标记块，或正文中已出现同一 bin 目录路径，则**跳过**，避免重复。安装脚本还会把 **`bin` 加入当前 install 进程**的 `PATH`；若检测到**由 zsh 启动**且为**交互 TTY**，默认会 **`exec zsh -l`**，相当于重新进入登录 zsh 并加载 `~/.zshrc`（`exit` 可回到上一层 shell）。不需要该行为时设 **`NLTDEPLOY_AUTO_EXEC_ZSH_AFTER_INSTALL=0`**，再手动 `source ~/.zshrc` 即可。
 
 若需自行配置，等价写法为：
 
@@ -66,7 +66,8 @@ export PATH="$HOME/.local/nltdeploy/bin:$PATH"
 可选环境变量：
 
 - **`NLTDEPLOY_ROOT`**：安装根目录（默认 `~/.local/nltdeploy`）。
-- **`NLTDEPLOY_SKIP_PROFILE_HINT=1`**：不自动写入 shell 配置、不打印上述 PATH 说明（适合 CI；`tests/install_smoke.sh` 已默认设置）。
+- **`NLTDEPLOY_SKIP_PROFILE_HINT=1`**：不自动写入 shell 配置、不打印 PATH 说明、也不做安装结束后的 `exec zsh`（适合 CI；`tests/install_smoke.sh` 已默认设置）。
+- **`NLTDEPLOY_AUTO_EXEC_ZSH_AFTER_INSTALL=0`**：关闭安装结束时的 `exec zsh -l`（仍会把 `bin` 加入当前 install 进程的 `PATH`，并提示手动 `source`）。
 - **`NLTDEPLOY_UNINSTALL_YES=1`**：`install.sh uninstall` 在非 TTY 下跳过确认（与删除 `NLTDEPLOY_ROOT` 配合使用）。
 - **`NLTDEPLOY_SKIP_GIT_PULL=1`**：不执行 `git pull`，仍按当前工作区/已克隆内容同步 `libexec` 与 `bin`。
 - **`NLTDEPLOY_GIT_CLONE_REF`**：（可选）管道安装时 `git clone` 使用的分支或 tag。若 raw 地址使用 **`master`** 而仓库默认分支是 **`main`**，请同时设 `NLTDEPLOY_GIT_CLONE_REF=master`，或改用 raw 的 **`HEAD`**（与默认分支一致）。`install.sh` 内复制路径已对旧版 `scripts/_lib`、扁平目录与 `tools/` / `services/` 布局做兼容。
@@ -89,7 +90,7 @@ bash tests/install_smoke.sh
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/tools/utils/setup.sh` … |
 | `nlt-github-net` | `scripts/tools/github-net/setup.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
 | `nlt-services` | `scripts/services/nlt-services.sh`（无参 gum；`status`；`install` 先选安装或卸载；非交互：`install add <模块>` / `install remove <模块>`；`status --no-http`） |
-| `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install`（git clone + pnpm install）等；无参为 gum 菜单 |
+| `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install` / `onboard` / `start` 等；无参为 gum 菜单 |
 | `nlt-code-server` | `scripts/services/code-server/setup.sh` 全量子命令；`install`（下载解压官方包）等；无参为 gum 菜单 |
 | `nlt-new-api` | `scripts/services/new-api/setup.sh` 全量子命令；`install` / `update` 下载 Release 二进制；无参为 gum 菜单 |
 
