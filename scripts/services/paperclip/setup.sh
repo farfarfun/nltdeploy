@@ -17,6 +17,7 @@
 #   PAPERCLIP_REPO_URL       上游 Git（默认 https://github.com/paperclipai/paperclip.git）
 #   PAPERCLIP_GIT_BRANCH     克隆分支（默认 main）
 #   PAPERCLIP_PORT           监听与健康检查端口（默认 8804；启动时 export PORT 同值）
+#   PAPERCLIP_WORKSPACE      本机默认工作区目录（默认 ${PAPERCLIP_SERVICE_HOME}/workspace，即 ~/opt/paperclip/workspace）
 #   PAPERCLIP_HOME           上游数据根（默认 ~/.paperclip），与官方 CLI 一致
 #   PAPERCLIP_INSTANCE_ID    实例 id（默认 default）
 #   NONINTERACTIVE=1         跳过 gum 确认；onboard 子命令使用 --yes
@@ -42,6 +43,7 @@ PAPERCLIP_GIT_BRANCH="${PAPERCLIP_GIT_BRANCH:-main}"
 PAPERCLIP_PORT="${PAPERCLIP_PORT:-8804}"
 
 PAPERCLIP_SRC="${PAPERCLIP_SRC:-${PAPERCLIP_SERVICE_HOME}/src/paperclip}"
+PAPERCLIP_WORKSPACE="${PAPERCLIP_WORKSPACE:-${PAPERCLIP_SERVICE_HOME}/workspace}"
 PAPERCLIP_RUN_DIR="${PAPERCLIP_SERVICE_HOME}/run"
 PAPERCLIP_LOG_DIR="${PAPERCLIP_SERVICE_HOME}/log"
 PID_FILE="${PAPERCLIP_RUN_DIR}/paperclip.pid"
@@ -65,6 +67,7 @@ usage() {
 
 说明: 上游在无 ~/.paperclip/.../config.json 且非 TTY 时不会自动 onboard；start 会尝试用 script(1)+onboard --yes 生成配置。
       若仍失败，请在终端执行: cd ${PAPERCLIP_SRC} && pnpm paperclipai onboard
+      默认工作区目录: ${PAPERCLIP_WORKSPACE}（见 PAPERCLIP_WORKSPACE）；start 会尽量将 instances/.../workspaces 符号链接到该目录。
 USAGE
 }
 
@@ -72,6 +75,42 @@ paperclip_instance_config_json() {
   local root="${PAPERCLIP_HOME:-${HOME}/.paperclip}"
   local id="${PAPERCLIP_INSTANCE_ID:-default}"
   echo "${root}/instances/${id}/config.json"
+}
+
+paperclip_instance_workspaces_dir() {
+  local root="${PAPERCLIP_HOME:-${HOME}/.paperclip}"
+  local id="${PAPERCLIP_INSTANCE_ID:-default}"
+  echo "${root}/instances/${id}/workspaces"
+}
+
+# 将上游实例下的 workspaces 指到 PAPERCLIP_WORKSPACE，便于在 ~/opt/paperclip/workspace 下集中存放各 agent 工作目录
+ensure_paperclip_workspaces_symlink() {
+  mkdir -p "${PAPERCLIP_WORKSPACE}"
+  local ws target
+  ws="$(paperclip_instance_workspaces_dir)"
+  target="$(cd "${PAPERCLIP_WORKSPACE}" && pwd -P)"
+  mkdir -p "$(dirname "$ws")" 2>/dev/null || true
+  if [[ -L "$ws" ]]; then
+    return 0
+  fi
+  if [[ -d "$ws" ]]; then
+    if [[ -z "$(ls -A "$ws" 2>/dev/null)" ]]; then
+      rmdir "$ws" 2>/dev/null || true
+    else
+      echo "[INFO] ${ws} 非空，未改为符号链接；仍使用上游默认路径。可清空后重启本脚本以链接到 ${target}。" >&2
+      return 0
+    fi
+  fi
+  if [[ -e "$ws" ]]; then
+    return 0
+  fi
+  ln -sfn "$target" "$ws"
+  echo "==> workspaces 已链接: ${ws} -> ${target}" >&2
+}
+
+paperclip_export_runtime_env() {
+  export PORT="${PAPERCLIP_PORT}"
+  export PAPERCLIP_WORKSPACE
 }
 
 # 无配置时：在伪终端下执行 onboard --yes；若上游在 onboard 结束后仍常驻监听，在检测到 config 出现后结束该进程
@@ -90,10 +129,11 @@ ensure_paperclip_instance_config() {
   op_log="$(mktemp "${TMPDIR:-/tmp}/nlt-paperclip-onboard.XXXXXX")"
   (
     cd "${PAPERCLIP_SRC}" || exit 1
+    paperclip_export_runtime_env
     if script -qec "exit 0" /dev/null 2>/dev/null; then
-      exec script -qec "cd \"${PAPERCLIP_SRC}\" && pnpm paperclipai onboard --yes" /dev/null
+      exec script -qec "cd \"${PAPERCLIP_SRC}\" && export PORT=\"${PORT}\" PAPERCLIP_WORKSPACE=\"${PAPERCLIP_WORKSPACE}\" && pnpm paperclipai onboard --yes" /dev/null
     else
-      exec script -q /dev/null bash -c "cd \"${PAPERCLIP_SRC}\" && pnpm paperclipai onboard --yes"
+      exec script -q /dev/null bash -c "cd \"${PAPERCLIP_SRC}\" && export PORT=\"${PORT}\" PAPERCLIP_WORKSPACE=\"${PAPERCLIP_WORKSPACE}\" && pnpm paperclipai onboard --yes"
     fi
   ) >>"${op_log}" 2>&1 &
   local opid=$!
@@ -127,7 +167,7 @@ ensure_paperclip_instance_config() {
 }
 
 ensure_dirs() {
-  mkdir -p "${PAPERCLIP_RUN_DIR}" "${PAPERCLIP_LOG_DIR}"
+  mkdir -p "${PAPERCLIP_RUN_DIR}" "${PAPERCLIP_LOG_DIR}" "${PAPERCLIP_WORKSPACE}"
 }
 
 die() { echo "错误: $*" >&2; exit 1; }
@@ -219,14 +259,19 @@ cmd_update() {
 cmd_onboard() {
   require_node
   ensure_pnpm
+  ensure_dirs
   [[ -d "${PAPERCLIP_SRC}" && -f "${PAPERCLIP_SRC}/package.json" ]] || die "未安装源码，请先: $0 install"
   pushd "${PAPERCLIP_SRC}" >/dev/null
+  paperclip_export_runtime_env
   if [[ "${NONINTERACTIVE:-}" == "1" ]]; then
     pnpm paperclipai onboard --yes "$@"
   else
     pnpm paperclipai onboard "$@"
   fi
   popd >/dev/null
+  if [[ -f "$(paperclip_instance_config_json)" ]]; then
+    ensure_paperclip_workspaces_symlink || true
+  fi
 }
 
 cmd_start() {
@@ -235,6 +280,7 @@ cmd_start() {
   [[ -d "${PAPERCLIP_SRC}" && -f "${PAPERCLIP_SRC}/package.json" ]] || die "未安装源码，请先: $0 install"
   ensure_dirs
   ensure_paperclip_instance_config
+  ensure_paperclip_workspaces_symlink
   local existing
   existing="$(read_pid)"
   if [[ -n "$existing" ]] && process_alive "$existing"; then
@@ -245,7 +291,7 @@ cmd_start() {
   echo "==> 启动 Paperclip（pnpm paperclipai run），日志: ${LOG_FILE}" >&2
   echo "    默认 UI/API: http://127.0.0.1:${PAPERCLIP_PORT}" >&2
   pushd "${PAPERCLIP_SRC}" >/dev/null
-  export PORT="${PAPERCLIP_PORT}"
+  paperclip_export_runtime_env
   nohup pnpm paperclipai run >>"${LOG_FILE}" 2>&1 &
   local cpid=$!
   echo "$cpid" >"$PID_FILE"
@@ -298,6 +344,14 @@ cmd_status() {
   pid="$(read_pid)"
   echo "PAPERCLIP_SRC=${PAPERCLIP_SRC}"
   echo "PAPERCLIP_SERVICE_HOME=${PAPERCLIP_SERVICE_HOME}"
+  echo "PAPERCLIP_WORKSPACE=${PAPERCLIP_WORKSPACE}"
+  local _ws
+  _ws="$(paperclip_instance_workspaces_dir)"
+  if [[ -L "$_ws" ]]; then
+    echo "instances/.../workspaces -> $(readlink "$_ws" 2>/dev/null || true)"
+  elif [[ -d "$_ws" ]]; then
+    echo "instances/.../workspaces=${_ws}（目录）"
+  fi
   if [[ -n "$pid" ]] && process_alive "$pid"; then
     echo "状态: 运行中 PID ${pid}"
   else
