@@ -89,6 +89,7 @@ bash tests/install_smoke.sh
 | `nlt-celery` | `scripts/services/celery/setup.sh` 全量子命令；`install` / `update`；`start-worker` / `stop` / `status` 等；无参为菜单 |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/tools/utils/setup.sh` … |
 | `nlt-github-net` | `scripts/tools/github-net/setup.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
+| `nlt-port-kill` | `scripts/tools/port-kill/setup.sh`（`kill` / `list`；可 `source … --lib` 调用 `nlt_kill_port`；无参 gum；`NONINTERACTIVE=1` 跳过确认） |
 | `nlt-services` | `scripts/services/nlt-services.sh`（无参 gum；`status`；`install` 先选安装或卸载；非交互：`install add <模块>` / `install remove <模块>`；`status --no-http`） |
 | `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install` / `onboard` / `start` 等；无参为 gum 菜单 |
 | `nlt-code-server` | `scripts/services/code-server/setup.sh` 全量子命令；`install`（下载解压官方包）等；无参为 gum 菜单 |
@@ -118,8 +119,10 @@ nltdeploy/
 │   │   │   └── README.md
 │   │   ├── utils/
 │   │   │   └── setup.sh                # gum / 别名 / all
-│   │   └── github-net/
-│   │       └── setup.sh                # Git 连通性诊断与修复
+│   │   ├── github-net/
+│   │   │   └── setup.sh                # Git 连通性诊断与修复
+│   │   └── port-kill/
+│   │       └── setup.sh                # 按端口查杀进程（可 source 复用）
 │   └── services/                       # 常驻服务与聚合入口
 │       ├── nlt-services.sh             # nlt-services：status + install 聚合入口
 │       ├── airflow/
@@ -134,7 +137,7 @@ nltdeploy/
 │           └── setup.sh                # new-api Release 二进制与启停
 ```
 
-**`scripts/tools/`** 放 pip、Python 环境、gum/别名、GitHub 网络等 **工具向** 脚本；**`scripts/services/`** 放 Airflow、Celery、Paperclip、code-server、new-api 等 **服务向** 脚本及 **`nlt-services.sh`** 聚合入口。建议先跑 tools 再按需装 services；除 pip-sources / python-env 外可按需独立执行。
+**`scripts/tools/`** 放 pip、Python 环境、gum/别名、GitHub 网络、端口查杀等 **工具向** 脚本；**`scripts/services/`** 放 Airflow、Celery、Paperclip、code-server、new-api 等 **服务向** 脚本及 **`nlt-services.sh`** 聚合入口。建议先跑 tools 再按需装 services；除 pip-sources / python-env 外可按需独立执行。
 
 ## 快速开始
 
