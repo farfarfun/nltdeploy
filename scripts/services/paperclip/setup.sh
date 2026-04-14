@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Paperclip（https://github.com/paperclipai/paperclip）本机服务：从 GitHub 克隆源码 + pnpm 安装 + 启停。
-# 默认数据见上游文档：~/.paperclip/instances/default/（可用 PAPERCLIP_HOME 覆盖）。
+# 默认实例数据根 PAPERCLIP_HOME 与 PAPERCLIP_WORKSPACE 一致（~/opt/paperclip/workspace）；官方默认常为 ~/.paperclip，可用环境变量改回。
 #
 # 依赖：git、Node.js 20+、pnpm 9+（无 pnpm 时尝试 corepack enable）
 #
@@ -8,7 +8,8 @@
 #   ./setup.sh              # gum 菜单
 #   ./setup.sh install      # 克隆/拉取源码并 pnpm install
 #   ./setup.sh update       # git pull + pnpm install
-#   ./setup.sh start        # 后台启动（pnpm paperclipai run）；无配置时会先非交互生成默认配置
+#   ./setup.sh start        # 后台启动（pnpm paperclipai run）；无配置时会先非交互生成默认配置；默认轮询 /api/health 校验
+#   ./setup.sh fix-embedded-postgres [版本]  # 显式安装 @embedded-postgres/<当前平台>（pnpm 常漏装 optional 平台包）；版本可降级
 #   ./setup.sh onboard      # 上游首次配置（NONINTERACTIVE=1 时加 --yes）
 #   ./setup.sh stop / restart / status
 #
@@ -18,10 +19,15 @@
 #   PAPERCLIP_GIT_BRANCH     克隆分支（默认 main）
 #   PAPERCLIP_PORT           监听与健康检查端口（默认 8804；启动时 export PORT 同值）
 #   PAPERCLIP_WORKSPACE      本机默认工作区目录（默认 ${PAPERCLIP_SERVICE_HOME}/workspace，即 ~/opt/paperclip/workspace）
-#   PAPERCLIP_HOME           上游数据根（默认 ~/.paperclip），与官方 CLI 一致
+#   PAPERCLIP_HOME           上游数据根（默认与 PAPERCLIP_WORKSPACE 相同）；未设置时实例在 workspace 下，避免占用 ~/.paperclip
 #   PAPERCLIP_INSTANCE_ID    实例 id（默认 default）
 #   NONINTERACTIVE=1         跳过 gum 确认；onboard 子命令使用 --yes
 #   PAPERCLIP_UNINSTALL_YES=1  非 TTY 卸载确认
+#   PAPERCLIP_START_HEALTH_TIMEOUT_SEC  start 时等待 /api/health 返回 200 的最长时间秒数（默认 60）
+#   PAPERCLIP_SKIP_START_HEALTH_CHECK=1   仅确认进程存活，不请求 HTTP（不推荐）
+#   PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_VERSION  fix-embedded-postgres 默认使用的版本/SemVer 范围；命令行 [版本] 优先
+#   PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_PKG   非标准平台时指定完整包名，如 @embedded-postgres/linux-x64-gnu
+#   PAPERCLIP_EMBEDDED_POSTGRES_NO_REGISTRY_FALLBACK=1  fix-embedded-postgres 在 pnpm add 失败时不改用 registry latest 重试
 
 set -euo pipefail
 
@@ -44,6 +50,7 @@ PAPERCLIP_PORT="${PAPERCLIP_PORT:-8804}"
 
 PAPERCLIP_SRC="${PAPERCLIP_SRC:-${PAPERCLIP_SERVICE_HOME}/src/paperclip}"
 PAPERCLIP_WORKSPACE="${PAPERCLIP_WORKSPACE:-${PAPERCLIP_SERVICE_HOME}/workspace}"
+PAPERCLIP_HOME="${PAPERCLIP_HOME:-${PAPERCLIP_WORKSPACE}}"
 PAPERCLIP_RUN_DIR="${PAPERCLIP_SERVICE_HOME}/run"
 PAPERCLIP_LOG_DIR="${PAPERCLIP_SERVICE_HOME}/log"
 PID_FILE="${PAPERCLIP_RUN_DIR}/paperclip.pid"
@@ -58,27 +65,28 @@ usage() {
 命令:
   install     克隆 ${PAPERCLIP_REPO_URL} 到 ${PAPERCLIP_SRC}（已存在则 fetch 后 checkout 分支）并执行 pnpm install
   update      git pull 后 pnpm install
-  start       后台启动: cd 源码目录 && pnpm paperclipai run（日志 ${LOG_FILE}）；若无实例配置则先 onboard --yes
+  start       后台启动: cd 源码目录 && pnpm paperclipai run（日志 ${LOG_FILE}）；若无实例配置则先 onboard --yes；默认校验 /api/health
+  fix-embedded-postgres [版本]  在源码根执行 pnpm add，安装/固定 @embedded-postgres/<本机平台>（可传降级版本，或设 PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_VERSION）
   onboard     首次配置（交互）；NONINTERACTIVE=1 时执行 onboard --yes
   stop        停止进程
   restart     stop 后 start
   status      PID 与 HTTP 健康检查 http://127.0.0.1:${PAPERCLIP_PORT}/api/health
   uninstall   停止进程并删除 ${PAPERCLIP_SERVICE_HOME}（不可逆，有确认）
 
-说明: 上游在无 ~/.paperclip/.../config.json 且非 TTY 时不会自动 onboard；start 会尝试用 script(1)+onboard --yes 生成配置。
+说明: 上游在无实例 config（默认 ${PAPERCLIP_HOME}/instances/<id>/config.json）且非 TTY 时不会自动 onboard；start 会尝试用 script(1)+onboard --yes 生成配置。
       若仍失败，请在终端执行: cd ${PAPERCLIP_SRC} && pnpm paperclipai onboard
       默认工作区目录: ${PAPERCLIP_WORKSPACE}（见 PAPERCLIP_WORKSPACE）；start 会尽量将 instances/.../workspaces 符号链接到该目录。
 USAGE
 }
 
 paperclip_instance_config_json() {
-  local root="${PAPERCLIP_HOME:-${HOME}/.paperclip}"
+  local root="${PAPERCLIP_HOME}"
   local id="${PAPERCLIP_INSTANCE_ID:-default}"
   echo "${root}/instances/${id}/config.json"
 }
 
 paperclip_instance_workspaces_dir() {
-  local root="${PAPERCLIP_HOME:-${HOME}/.paperclip}"
+  local root="${PAPERCLIP_HOME}"
   local id="${PAPERCLIP_INSTANCE_ID:-default}"
   echo "${root}/instances/${id}/workspaces"
 }
@@ -110,6 +118,7 @@ ensure_paperclip_workspaces_symlink() {
 
 paperclip_export_runtime_env() {
   export PORT="${PAPERCLIP_PORT}"
+  export PAPERCLIP_HOME
   export PAPERCLIP_WORKSPACE
 }
 
@@ -131,9 +140,9 @@ ensure_paperclip_instance_config() {
     cd "${PAPERCLIP_SRC}" || exit 1
     paperclip_export_runtime_env
     if script -qec "exit 0" /dev/null 2>/dev/null; then
-      exec script -qec "cd \"${PAPERCLIP_SRC}\" && export PORT=\"${PORT}\" PAPERCLIP_WORKSPACE=\"${PAPERCLIP_WORKSPACE}\" && pnpm paperclipai onboard --yes" /dev/null
+      exec script -qec "cd \"${PAPERCLIP_SRC}\" && export PORT=\"${PORT}\" PAPERCLIP_HOME=\"${PAPERCLIP_HOME}\" PAPERCLIP_WORKSPACE=\"${PAPERCLIP_WORKSPACE}\" && pnpm paperclipai onboard --yes" /dev/null
     else
-      exec script -q /dev/null bash -c "cd \"${PAPERCLIP_SRC}\" && export PORT=\"${PORT}\" PAPERCLIP_WORKSPACE=\"${PAPERCLIP_WORKSPACE}\" && pnpm paperclipai onboard --yes"
+      exec script -q /dev/null bash -c "cd \"${PAPERCLIP_SRC}\" && export PORT=\"${PORT}\" PAPERCLIP_HOME=\"${PAPERCLIP_HOME}\" PAPERCLIP_WORKSPACE=\"${PAPERCLIP_WORKSPACE}\" && pnpm paperclipai onboard --yes"
     fi
   ) >>"${op_log}" 2>&1 &
   local opid=$!
@@ -183,6 +192,89 @@ read_pid() {
     return
   fi
   tr -d '[:space:]' <"$PID_FILE" || true
+}
+
+paperclip_locate_embedded_postgres_pkgjson() {
+  if [[ ! -d "${PAPERCLIP_SRC}/node_modules" ]]; then
+    echo ""
+    return 1
+  fi
+  find "${PAPERCLIP_SRC}/node_modules" -path '*/embedded-postgres/package.json' 2>/dev/null | head -1
+}
+
+# 输出一行: 包名<TAB>embedded-postgres 对该平台的 optionalDependencies 条目（版本或范围）
+paperclip_embedded_platform_pkg_tab_spec() {
+  local ep_json="$1"
+  node -e '
+const fs = require("fs");
+const epJson = process.argv[1];
+const overridePkg = process.env.PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_PKG || "";
+if (!epJson || !fs.existsSync(epJson)) {
+  console.error("embedded-postgres package.json not found:", epJson);
+  process.exit(2);
+}
+const j = JSON.parse(fs.readFileSync(epJson, "utf8"));
+const opt = j.optionalDependencies || {};
+const { platform, arch } = process;
+let suffix = platform + "-" + arch;
+if (platform === "win32") suffix = arch === "arm64" ? "win32-arm64" : "win32-x64";
+let name = "@embedded-postgres/" + suffix;
+if (overridePkg) name = overridePkg;
+let ver = opt[name];
+if (!ver) {
+  if (overridePkg) {
+    process.stdout.write(name + "\t\n");
+    process.exit(0);
+  }
+  const keys = Object.keys(opt).filter((k) => k.startsWith("@embedded-postgres/"));
+  console.error("No optionalDependency for " + name + ". Available: " + (keys.join(", ") || "(none)"));
+  process.exit(3);
+}
+process.stdout.write(name + "\t" + ver + "\n");
+' "$ep_json"
+}
+
+paperclip_curl_health_http_code() {
+  curl -sS -o /dev/null -w '%{http_code}' -m 3 "http://127.0.0.1:${PAPERCLIP_PORT}/api/health" 2>/dev/null || echo "000"
+}
+
+# 返回 0=健康；1=超时仍存活；2=进程已退出
+paperclip_wait_ready() {
+  local pid="$1"
+  local max="${PAPERCLIP_START_HEALTH_TIMEOUT_SEC:-60}"
+  local i=0
+  while (( i < max )); do
+    if ! process_alive "$pid"; then
+      return 2
+    fi
+    if command -v curl >/dev/null 2>&1; then
+      local code
+      code="$(paperclip_curl_health_http_code)"
+      if [[ "$code" == "200" ]]; then
+        return 0
+      fi
+    elif (( i >= 8 )); then
+      echo "[WARN] 未安装 curl，无法在启动后校验 /api/health；进程仍存活则视为启动成功。" >&2
+      return 0
+    fi
+    sleep 1
+    i=$((i + 1))
+  done
+  return 1
+}
+
+paperclip_start_failure_hints() {
+  echo "---- 最近日志（${LOG_FILE}）----" >&2
+  tail -n 80 "${LOG_FILE}" 2>/dev/null >&2 || true
+  if grep -q "ERR_MODULE_NOT_FOUND" "${LOG_FILE}" 2>/dev/null && grep -q "embedded-postgres" "${LOG_FILE}" 2>/dev/null; then
+    echo "" >&2
+    echo "提示: 疑似缺少或无法解析 @embedded-postgres/<平台> 可选依赖。可尝试:" >&2
+    echo "  $0 fix-embedded-postgres" >&2
+    echo "（若上游 optional 范围在 registry 无解，脚本会自动改用该包的 dist-tag latest）" >&2
+    echo "或指定显式版本:" >&2
+    echo "  $0 fix-embedded-postgres 18.1.0-beta.15" >&2
+    echo "  PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_VERSION=<版本> $0 fix-embedded-postgres" >&2
+  fi
 }
 
 require_git() {
@@ -274,6 +366,56 @@ cmd_onboard() {
   fi
 }
 
+paperclip_pnpm_add_platform_pkg_at() {
+  local pkg="$1"
+  local ver="$2"
+  (
+    cd "${PAPERCLIP_SRC}" || exit 1
+    if [[ -f pnpm-workspace.yaml ]] || [[ -f pnpm-workspace.yml ]]; then
+      pnpm add "${pkg}@${ver}" -w
+    else
+      pnpm add "${pkg}@${ver}"
+    fi
+  )
+}
+
+cmd_fix_embedded_postgres() {
+  require_node
+  ensure_pnpm
+  [[ -d "${PAPERCLIP_SRC}" && -f "${PAPERCLIP_SRC}/package.json" ]] || die "未安装源码，请先: $0 install"
+  local ep_json want line pkg spec reg_ver
+  ep_json="$(paperclip_locate_embedded_postgres_pkgjson)"
+  [[ -n "$ep_json" && -f "$ep_json" ]] || die "未找到 embedded-postgres。请先: cd ${PAPERCLIP_SRC} && pnpm install"
+  line="$(paperclip_embedded_platform_pkg_tab_spec "$ep_json")" || die "无法解析平台包（可设置 PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_PKG）"
+  pkg="${line%%$'\t'*}"
+  spec="${line#*$'\t'}"
+  want="${1:-${PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_VERSION:-$spec}}"
+  [[ -n "$want" ]] || die "未指定版本。请执行: $0 fix-embedded-postgres <版本> 或设置 PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_VERSION（使用 PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_PKG 时需显式版本）"
+  echo "==> 在 ${PAPERCLIP_SRC} 安装平台二进制: ${pkg}@${want}" >&2
+  set +e
+  paperclip_pnpm_add_platform_pkg_at "$pkg" "$want"
+  local add_rc=$?
+  set -e
+  if [[ "$add_rc" -eq 0 ]]; then
+    echo "完成。可执行: $0 start"
+    return 0
+  fi
+  if [[ "${PAPERCLIP_EMBEDDED_POSTGRES_NO_REGISTRY_FALLBACK:-}" == "1" ]]; then
+    die "pnpm add 失败（已设置 PAPERCLIP_EMBEDDED_POSTGRES_NO_REGISTRY_FALLBACK=1，未尝试 registry 回退）。可改用显式版本: $0 fix-embedded-postgres <版本>"
+  fi
+  echo "==> 警告: ${pkg}@${want} 安装失败（常见原因：embedded-postgres 的 optional 范围指向尚未发布的平台包版本，例如 registry 仅有 beta.15 而范围为 ^beta.16）。" >&2
+  echo "==> 正在查询 ${pkg} 的 dist-tag latest …" >&2
+  reg_ver="$(cd "${PAPERCLIP_SRC}" && pnpm view "$pkg" version 2>/dev/null | tail -1)"
+  reg_ver="$(echo "$reg_ver" | tr -d '[:space:]')"
+  [[ -n "$reg_ver" ]] || die "仍无法安装，且 pnpm view ${pkg} version 无结果。请手动: pnpm view ${pkg} versions"
+  if [[ "$reg_ver" == "$want" ]]; then
+    die "pnpm add 已失败且 registry latest 与尝试版本相同。请查看上方 pnpm 报错或清理 node_modules 后重试 pnpm install。"
+  fi
+  echo "==> 改用 registry latest: ${pkg}@${reg_ver}" >&2
+  paperclip_pnpm_add_platform_pkg_at "$pkg" "$reg_ver" || die "pnpm add ${pkg}@${reg_ver} 仍失败"
+  echo "完成（已使用 registry 最新平台包 ${reg_ver}）。若运行期与 embedded-postgres 不兼容，请改用: $0 fix-embedded-postgres <显式版本>。可执行: $0 start"
+}
+
 cmd_start() {
   require_node
   ensure_pnpm
@@ -297,12 +439,30 @@ cmd_start() {
   echo "$cpid" >"$PID_FILE"
   popd >/dev/null
   sleep 1
-  existing="$(read_pid)"
-  if [[ -n "$existing" ]] && process_alive "$existing"; then
-    echo "已启动 PID ${existing}"
-  else
-    echo "警告: 未能确认进程存活，请查看日志: tail -50 ${LOG_FILE}" >&2
+  if ! process_alive "$cpid"; then
+    rm -f "$PID_FILE"
+    paperclip_start_failure_hints
+    die "进程已退出，启动失败。"
   fi
+  if [[ "${PAPERCLIP_SKIP_START_HEALTH_CHECK:-}" == "1" ]]; then
+    echo "已启动 PID ${cpid}（已跳过 HTTP 健康检查）"
+    return 0
+  fi
+  echo "==> 等待 http://127.0.0.1:${PAPERCLIP_PORT}/api/health 就绪（最长 ${PAPERCLIP_START_HEALTH_TIMEOUT_SEC:-60}s）…" >&2
+  local wr=0
+  paperclip_wait_ready "$cpid" || wr=$?
+  if [[ "$wr" -eq 0 ]]; then
+    echo "已启动 PID ${cpid}，健康检查通过。"
+    return 0
+  fi
+  if [[ "$wr" -eq 2 ]]; then
+    rm -f "$PID_FILE"
+    paperclip_start_failure_hints
+    die "进程已退出，启动失败。"
+  fi
+  echo "错误: 在 ${PAPERCLIP_START_HEALTH_TIMEOUT_SEC:-60}s 内未通过健康检查；进程可能仍在运行（PID ${cpid}）。" >&2
+  paperclip_start_failure_hints
+  die "启动校验失败。"
 }
 
 cmd_stop() {
@@ -344,6 +504,7 @@ cmd_status() {
   pid="$(read_pid)"
   echo "PAPERCLIP_SRC=${PAPERCLIP_SRC}"
   echo "PAPERCLIP_SERVICE_HOME=${PAPERCLIP_SERVICE_HOME}"
+  echo "PAPERCLIP_HOME=${PAPERCLIP_HOME}"
   echo "PAPERCLIP_WORKSPACE=${PAPERCLIP_WORKSPACE}"
   local _ws
   _ws="$(paperclip_instance_workspaces_dir)"
@@ -370,7 +531,7 @@ cmd_uninstall() {
   cmd_stop || true
   echo "将删除目录: ${PAPERCLIP_SERVICE_HOME}" >&2
   if [[ -t 0 ]]; then
-    gum confirm "确认永久删除上述目录（不含 ~/.paperclip 数据，仅服务安装根）？" || exit 0
+    gum confirm "确认永久删除上述目录（不含 PAPERCLIP_HOME=${PAPERCLIP_HOME} 下数据，仅服务安装根）？" || exit 0
   else
     [[ "${PAPERCLIP_UNINSTALL_YES:-}" == "1" ]] || die "非交互卸载请设置 PAPERCLIP_UNINSTALL_YES=1"
   fi
@@ -381,7 +542,7 @@ cmd_uninstall() {
     die "拒绝删除根目录或 \$HOME"
   fi
   rm -rf "${PAPERCLIP_SERVICE_HOME}"
-  echo "已删除 ${PAPERCLIP_SERVICE_HOME}（上游数据目录 ~/.paperclip 需自行清理）"
+  echo "已删除 ${PAPERCLIP_SERVICE_HOME}（实例数据在 PAPERCLIP_HOME=${PAPERCLIP_HOME}，需自行清理）"
 }
 
 dispatch() {
@@ -391,6 +552,7 @@ dispatch() {
     install) cmd_install ;;
     update) cmd_update ;;
     onboard) cmd_onboard "$@" ;;
+    fix-embedded-postgres) cmd_fix_embedded_postgres "$@" ;;
     start) cmd_start ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
@@ -408,12 +570,13 @@ dispatch() {
 interactive_main() {
   gum style --bold --foreground 212 "Paperclip 本地服务（源码: paperclipai/paperclip）"
   gum style "PAPERCLIP_SRC=${PAPERCLIP_SRC}"
+  gum style "PAPERCLIP_HOME=${PAPERCLIP_HOME}"
   echo ""
   set +e
   while true; do
     local pick
     pick="$(gum choose --header "选择操作（取消退出）" \
-      "install" "update" "onboard" "start" "stop" "restart" "status" "uninstall" "help" "quit")" || break
+      "install" "update" "onboard" "fix-embedded-postgres" "start" "stop" "restart" "status" "uninstall" "help" "quit")" || break
     [[ -z "$pick" ]] && break
     case "$pick" in
       quit) break ;;
