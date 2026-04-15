@@ -77,7 +77,16 @@ export PATH="$HOME/.local/nltdeploy/bin:$PATH"
 
 ```bash
 bash tests/install_smoke.sh
+bash tests/progress_smoke.sh
 ```
+
+### 进度条库（`nlt-progress`）
+
+安装后与其他 lib 一并位于 **`${NLTDEPLOY_ROOT}/libexec/nltdeploy/lib/nlt-progress.sh`**（默认即 `~/.local/nltdeploy/libexec/nltdeploy/lib/nlt-progress.sh`）。开发时可直接 `source` 仓库内 **`scripts/lib/nlt-progress.sh`**。
+
+提供 **`nlt_pb_human_bytes`**、**`nlt_pb_render`** / **`nlt_pb_done`**（TTY 下一行进度条：百分比、已用/ETA、速率与 xfer 大小），以及 **`nlt_pb_curl_to_file <url> <dest> [total_bytes]`**（后台 `curl` 写文件时轮询本地大小并刷新进度；非 TTY 下默认降低日志噪声，可用 **`NLT_PB_LABEL`** 自定义标签）。依赖：Bash 3.2+、`awk`、`date`、可选 **`curl`**（仅下载辅助函数）。
+
+设计说明见 [`docs/superpowers/specs/2026-04-15-war-23-progress-bar-design.md`](docs/superpowers/specs/2026-04-15-war-23-progress-bar-design.md)。
 
 ### 命令对照表（安装后的 `bin` 与 `scripts/`）
 
@@ -106,10 +115,12 @@ nltdeploy/
 ├── examples/
 │   └── python_env_examples.md          # 与 uv/Python 环境相关的用法示例（偏命令行工具向）
 ├── tests/
-│   └── install_smoke.sh                # 安装与 bin 包装冒烟测试
+│   ├── install_smoke.sh                # 安装与 bin 包装冒烟测试
+│   └── progress_smoke.sh               # nlt-progress 语法与 source 冒烟
 ├── scripts/
 │   ├── lib/
-│   │   └── nlt-common.sh               # _nlt_ensure_gum 等公共片段（各 setup 脚本 source）
+│   │   ├── nlt-common.sh               # _nlt_ensure_gum 等公共片段（各 setup 脚本 source）
+│   │   └── nlt-progress.sh             # 可 source 的终端进度条与 curl 下载监视（可选）
 │   ├── tools/                          # 工具 / 环境类（非长期服务进程）
 │   │   ├── pip-sources/
 │   │   │   ├── setup.sh

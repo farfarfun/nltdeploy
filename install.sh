@@ -309,6 +309,9 @@ do_install_or_update() {
     "${SCRIPTS}/lib/nlt-common.sh" \
     "${SCRIPTS}/_lib/nlt-common.sh"
 
+  _nlt_cp_first "${LIBEXEC}/lib/nlt-progress.sh" \
+    "${SCRIPTS}/lib/nlt-progress.sh"
+
   _nlt_cp_first "${LIBEXEC}/pip-sources/setup.sh" \
     "${SCRIPTS}/tools/pip-sources/setup.sh" \
     "${SCRIPTS}/pip-sources/setup.sh"
