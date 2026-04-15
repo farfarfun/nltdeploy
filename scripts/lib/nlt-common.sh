@@ -4,6 +4,10 @@
 [[ -n "${_NLT_COMMON_LOADED:-}" ]] && return 0
 _NLT_COMMON_LOADED=1
 
+_NLT_COMMON_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=nlt-github-download.sh
+source "${_NLT_COMMON_LIB_DIR}/nlt-github-download.sh"
+
 _nltdeploy_raw_base() {
   printf '%s\n' "${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD}}"
 }
@@ -30,7 +34,7 @@ _nlt_ensure_gum() {
   local _url
   _url="$(_nlt_gum_utils_setup_url)"
   echo "未检测到 gum，执行: curl -LsSf ${_url} | bash -s -- gum" >&2
-  curl -LsSf "${_url}" | bash -s -- gum || {
+  _nlt_github_download_curl -LsSf "${_url}" | bash -s -- gum || {
     echo "错误: gum 安装失败（网络或 NLTDEPLOY_RAW_BASE / nltdeploy_RAW_BASE）。" >&2
     return 1
   }

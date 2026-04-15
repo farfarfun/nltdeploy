@@ -21,6 +21,18 @@
 
 set -euo pipefail
 
+_UTILS_INIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -f "${_UTILS_INIT_DIR}/../lib/nlt-github-download.sh" ]]; then
+  # shellcheck source=../lib/nlt-github-download.sh
+  source "${_UTILS_INIT_DIR}/../lib/nlt-github-download.sh"
+elif [[ -f "${_UTILS_INIT_DIR}/../../lib/nlt-github-download.sh" ]]; then
+  # shellcheck source=../../lib/nlt-github-download.sh
+  source "${_UTILS_INIT_DIR}/../../lib/nlt-github-download.sh"
+fi
+if ! declare -F _nlt_github_download_curl >/dev/null 2>&1; then
+  _nlt_github_download_curl() { command curl "$@"; }
+fi
+
 GUM_HOME="${GUM_HOME:-${HOME}/opt/gum}"
 
 usage() {
@@ -229,7 +241,7 @@ cmd_all() {
 }
 
 fetch_latest_gum_tag() {
-  curl -fsSL https://api.github.com/repos/charmbracelet/gum/releases/latest |
+  _nlt_github_download_curl -fsSL https://api.github.com/repos/charmbracelet/gum/releases/latest |
     sed -n 's/^  "tag_name": "\([^"]*\)".*/\1/p' | head -1
 }
 
@@ -313,7 +325,7 @@ _precheck_gum_release_downloadable() {
   asset="$(gum_tarball_name "$tag")" || return 1
   url="https://github.com/charmbracelet/gum/releases/download/${tag}/${asset}"
   _say_step "==> 校验: 探测 Release 包是否可访问（${asset}）…"
-  if ! curl -fsSIL --connect-timeout 10 --max-time 30 -o /dev/null "$url"; then
+  if ! _nlt_github_download_curl -fsSIL --connect-timeout 10 --max-time 30 -o /dev/null "$url"; then
     echo "错误: 无法访问下载地址（网络、代理或 GUM_TAG 是否匹配该资源）。" >&2
     echo "       ${url}" >&2
     return 1
@@ -366,7 +378,7 @@ install_gum_release() {
   echo "    ${url}"
   tmp="$(mktemp -d)"
   trap 'rm -rf "${tmp}"' EXIT
-  curl -fsSL "$url" -o "${tmp}/gum.tgz"
+  _nlt_github_download_curl -fsSL "$url" -o "${tmp}/gum.tgz"
   tar -xzf "${tmp}/gum.tgz" -C "${tmp}"
   shopt -s nullglob
   sub=( "${tmp}"/gum_* )

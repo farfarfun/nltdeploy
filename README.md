@@ -10,6 +10,7 @@
 - **celery**：Celery 安装与 worker/beat/flower 启停、状态；默认 `~/opt/celery`。
 - **utils**：安装 **gum**（`~/opt/gum`）与可选 shell 别名（`ll` / `la` / `lla`）。
 - **github-net**：诊断并修复「网页能开但 `git clone` 失败」的常见 HTTPS/SSH 问题。
+- **download**：`nlt-download` — 对 GitHub 族 HTTPS 下载 URL 做可选镜像/前缀改写后调用 `curl`；仓库内 **new-api / code-server / gum 安装路径** 等已统一经 `_nlt_github_download_curl` / `nlt-github-download.sh` 调用（见 `scripts/tools/download/README.md`）。
 - **paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，**默认工作区** **`~/opt/paperclip/workspace`**（环境变量 **`PAPERCLIP_WORKSPACE`**，可改）。`start` 会在实例就绪后尽量把上游 **`~/.paperclip/instances/<id>/workspaces`** 符号链接到该目录（若该 `workspaces` 已非空则跳过）。数据目录另见上游 `~/.paperclip/…`。无实例配置时 **`start` 会先非交互执行 `onboard --yes`**（依赖 `script(1)`）；也可手动 **`nlt-paperclip onboard`**（或 `NONINTERACTIVE=1 nlt-paperclip onboard`）。
 - **code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。
 - **new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 3000**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。
@@ -98,6 +99,7 @@ bash tests/progress_smoke.sh
 | `nlt-celery` | `scripts/services/celery/setup.sh` 全量子命令；`install` / `update`；`start-worker` / `stop` / `status` 等；无参为菜单 |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/tools/utils/setup.sh` … |
 | `nlt-github-net` | `scripts/tools/github-net/setup.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
+| `nlt-download` | `scripts/tools/download/setup.sh`（`curl` / `resolve-url`；与 `scripts/lib/nlt-github-download.sh` 同源；无参 gum） |
 | `nlt-port-kill` | `scripts/tools/port-kill/setup.sh`（`kill` / `list`；可 `source … --lib` 调用 `nlt_kill_port`；无参 gum；`NONINTERACTIVE=1` 跳过确认） |
 | `nlt-services` | `scripts/services/nlt-services.sh`（无参 gum；`status`；`install` 先选安装或卸载；非交互：`install add <模块>` / `install remove <模块>`；`status --no-http`） |
 | `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install` / `onboard` / `start` 等；无参为 gum 菜单 |
@@ -120,6 +122,7 @@ nltdeploy/
 ├── scripts/
 │   ├── lib/
 │   │   ├── nlt-common.sh               # _nlt_ensure_gum 等公共片段（各 setup 脚本 source）
+│   │   ├── nlt-github-download.sh      # GitHub 下载 URL 改写 + _nlt_github_download_curl（被 common / 各域复用）
 │   │   └── nlt-progress.sh             # 可 source 的终端进度条与 curl 下载监视（可选）
 │   ├── tools/                          # 工具 / 环境类（非长期服务进程）
 │   │   ├── pip-sources/
@@ -132,6 +135,9 @@ nltdeploy/
 │   │   │   └── setup.sh                # gum / 别名 / all
 │   │   ├── github-net/
 │   │   │   └── setup.sh                # Git 连通性诊断与修复
+│   │   ├── download/
+│   │   │   ├── setup.sh                # nlt-download：GitHub 友好 curl 包装
+│   │   │   └── selftest.sh
 │   │   └── port-kill/
 │   │       └── setup.sh                # 按端口查杀进程（可 source 复用）
 │   └── services/                       # 常驻服务与聚合入口

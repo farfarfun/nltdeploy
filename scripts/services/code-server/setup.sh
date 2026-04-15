@@ -100,7 +100,7 @@ _detect_platform() {
 _fetch_latest_version() {
   require_curl
   local out ver
-  out="$(curl -fsSL "https://api.github.com/repos/coder/code-server/releases/latest")" || return 1
+  out="$(_nlt_github_download_curl -fsSL "https://api.github.com/repos/coder/code-server/releases/latest")" || return 1
   ver="$(printf '%s' "$out" | sed -n 's/.*"tag_name": *"v\([0-9][0-9.]*\)".*/\1/p' | head -1)"
   if [[ -n "$ver" ]]; then
     echo "$ver"
@@ -134,7 +134,7 @@ _download_install() {
   echo "    ${url}" >&2
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "${tmpdir}"' RETURN
-  curl -fsSL "$url" -o "${tmpdir}/code-server.tgz"
+  _nlt_github_download_curl -fsSL "$url" -o "${tmpdir}/code-server.tgz"
   rm -rf "${CODE_SERVER_SERVICE_HOME}/lib" "${CODE_SERVER_SERVICE_HOME}/bin" 2>/dev/null || true
   mkdir -p "${CODE_SERVER_SERVICE_HOME}"
   tar -xzf "${tmpdir}/code-server.tgz" -C "${CODE_SERVER_SERVICE_HOME}" --strip-components=1

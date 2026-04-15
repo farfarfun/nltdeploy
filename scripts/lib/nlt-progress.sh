@@ -3,6 +3,10 @@
 [[ -n "${_NLT_PROGRESS_LOADED:-}" ]] && return 0
 _NLT_PROGRESS_LOADED=1
 
+_NLT_PROGRESS_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=nlt-github-download.sh
+source "${_NLT_PROGRESS_LIB_DIR}/nlt-github-download.sh"
+
 _nlt_file_size() {
   local f="$1"
   [[ -f "$f" ]] || { echo 0; return 0; }
@@ -53,6 +57,7 @@ _nlt_pb_fmt_hms() {
 
 _nlt_pb_parse_content_length() {
   local url="$1"
+  url="$(_nlt_github_download_resolve_url "$url")"
   curl -sI -L "$url" 2>/dev/null | awk 'BEGIN{IGNORECASE=1} /^content-length:/ {v=$2+0} END{print v+0}'
 }
 
@@ -162,6 +167,8 @@ nlt_pb_curl_to_file() {
 
   [[ -n "$url" && -n "$dest" ]] || return 2
   command -v curl >/dev/null 2>&1 || return 127
+
+  url="$(_nlt_github_download_resolve_url "$url")"
 
   if [[ -z "$total" || ! "$total" =~ ^[0-9]+$ ]]; then
     total="$(_nlt_pb_parse_content_length "$url")"

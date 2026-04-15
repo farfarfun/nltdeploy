@@ -300,6 +300,7 @@ do_install_or_update() {
   mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \
     "${NLTDEPLOY_ROOT}/share/nltdeploy" "${NLTDEPLOY_ROOT}/etc/nltdeploy"
   mkdir -p "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" "${LIBEXEC}/port-kill" \
+    "${LIBEXEC}/download" \
     "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net" \
     "${LIBEXEC}/paperclip" "${LIBEXEC}/code-server" "${LIBEXEC}/new-api" \
     "${LIBEXEC}/services" \
@@ -311,6 +312,9 @@ do_install_or_update() {
 
   _nlt_cp_first "${LIBEXEC}/lib/nlt-progress.sh" \
     "${SCRIPTS}/lib/nlt-progress.sh"
+
+  _nlt_cp_first "${LIBEXEC}/lib/nlt-github-download.sh" \
+    "${SCRIPTS}/lib/nlt-github-download.sh"
 
   _nlt_cp_first "${LIBEXEC}/pip-sources/setup.sh" \
     "${SCRIPTS}/tools/pip-sources/setup.sh" \
@@ -341,6 +345,12 @@ do_install_or_update() {
   _nlt_cp_first "${LIBEXEC}/port-kill/setup.sh" \
     "${SCRIPTS}/tools/port-kill/setup.sh"
 
+  _nlt_cp_first "${LIBEXEC}/download/setup.sh" \
+    "${SCRIPTS}/tools/download/setup.sh"
+
+  _nlt_cp_first "${LIBEXEC}/download/selftest.sh" \
+    "${SCRIPTS}/tools/download/selftest.sh"
+
   _nlt_cp_first "${LIBEXEC}/paperclip/setup.sh" \
     "${SCRIPTS}/services/paperclip/setup.sh" \
     "${SCRIPTS}/paperclip/setup.sh" \
@@ -366,6 +376,7 @@ do_install_or_update() {
   _emit_wrapper nlt-utils utils/setup.sh
   _emit_wrapper nlt-github-net github-net/setup.sh
   _emit_wrapper nlt-port-kill port-kill/setup.sh
+  _emit_wrapper nlt-download download/setup.sh
   _emit_wrapper nlt-services services/nlt-services.sh
 
   _emit_wrapper nlt-airflow airflow/setup.sh

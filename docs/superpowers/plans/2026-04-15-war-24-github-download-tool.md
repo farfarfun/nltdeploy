@@ -58,3 +58,16 @@
 - [ ] **Step 1:** `shellcheck` 或仓库既有静态检查（若有）对新增文件清零关键告警。
 - [ ] **Step 2:** Git 提交信息末尾追加 `Co-Authored-By: Paperclip <noreply@paperclip.ing>`。
 - [ ] **Step 3:** 在父工单 [WAR-24](/WAR/issues/WAR-24) 评论中简述实现要点并链接本计划文件（仓库路径即可）。
+
+### Task 6: 迁移既有 GitHub 下载（董事会：见 [WAR-24](/WAR/issues/WAR-24) 评论）
+
+**要求：** 项目中 **服务/工具脚本内** 对 GitHub 资源的下载一律经 `_nlt_github_download_curl`（或 `nlt-download curl`），删除直连 GitHub 的并行实现。
+
+**Files（核对清单）：**
+
+- [x] `scripts/lib/nlt-common.sh` — `_nlt_ensure_gum` 内 `curl` → `_nlt_github_download_curl`（并 `source nlt-github-download.sh`）
+- [x] `scripts/tools/utils/setup.sh` — gum Release / API 探测
+- [x] `scripts/services/new-api/setup.sh` — Releases API + 二进制下载
+- [x] `scripts/services/code-server/setup.sh` — latest API + tarball
+- [x] `scripts/lib/nlt-progress.sh` — `nlt_pb_curl_to_file` / HEAD 解析路径上的 GitHub URL
+- [x] `install.sh` — `nlt-download` 包装与 `libexec` 同步（若尚未合并则补齐）

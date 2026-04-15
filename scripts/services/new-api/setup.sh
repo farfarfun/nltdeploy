@@ -175,7 +175,7 @@ _resolve_tag() {
   fi
   require_curl
   local json picked
-  json="$(curl -fsSL "https://api.github.com/repos/${NEW_API_GITHUB_REPO}/releases?per_page=40")" || json=""
+  json="$(_nlt_github_download_curl -fsSL "https://api.github.com/repos/${NEW_API_GITHUB_REPO}/releases?per_page=40")" || json=""
   if [[ -n "$json" ]]; then
     picked="$(_pick_tag_from_releases_json "$json" || true)"
     if [[ -n "$picked" ]]; then
@@ -196,7 +196,7 @@ _download_install() {
   echo "    ${url}" >&2
   tmp="$(mktemp)"
   trap 'rm -f "${tmp}"' RETURN
-  curl -fsSL "$url" -o "${tmp}"
+  _nlt_github_download_curl -fsSL "$url" -o "${tmp}"
   mkdir -p "${NEW_API_SERVICE_HOME}/bin"
   install -m 0755 "${tmp}" "${NEW_API_BIN}"
   [[ -x "${NEW_API_BIN}" ]] || die "安装后二进制不可执行: ${NEW_API_BIN}"

@@ -14,7 +14,7 @@
 **成功标准：**
 
 - 提供稳定 CLI：`nlt-download curl …`（透传剩余参数给 `curl`），对 **识别为 GitHub 族** 的 URL 在调用前做 **可选** 的 URL 变换。
-- 提供 Bash 库函数（供 `new-api`、`code-server`、`utils/gum` 等后续渐进接入）：输入原始 URL 与输出路径意图，返回应使用的 URL（及可选的额外 `curl` 默认参数说明）。
+- 提供 Bash 库函数 **`_nlt_github_download_resolve_url`** / **`_nlt_github_download_curl`**（**`new-api`、`code-server`、`utils`（gum）、`nlt-common`（拉 gum 安装脚本）、`nlt-progress`（GitHub 资源下载）** 等已统一接入，不再保留平行的「裸 `curl` 直链 GitHub」实现路径）。
 - **默认行为与当前一致**（不设环境变量时不改写 URL），避免破坏现有用户。
 - 标准 `curl` 代理环境变量（`HTTPS_PROXY` / `ALL_PROXY` 等）继续生效，不在此工具内重复发明代理协议栈。
 
@@ -81,4 +81,15 @@
 
 - 不自动探测「哪个镜像最快」、不做周期性健康检查服务。
 - 不替代 `git clone`（仍由 `install.sh` 与 `github-net` 等既有路径负责）。
-- 不在此迭代强制改写所有历史脚本中的 `curl`（可作为后续子工单）。
+
+## 6. 仓库内迁移策略（董事会补充）
+
+凡 **本仓库内** 面向 **GitHub 资源（Release 资产、GitHub API、raw 等）** 的 **文件/JSON 下载**，须经 **`_nlt_github_download_curl`**（或等价的 `nlt-download curl`）路径，**不保留**并行的「脚本内手写直连 GitHub 的 `curl`」下载逻辑。  
+**例外**：面向 **非 GitHub 主机**（如 PyPI、astral.sh、本机 `127.0.0.1` 健康检查）的 `curl` 不变；面向用户的 **管道/bootstrap 文档** 仍可展示裸 `curl`（用户尚未安装 nltdeploy 时）。
+
+---
+
+## 7. 历史记录
+
+- 2026-04-15：初版规格。
+- 2026-04-15：按董事会评论增加 §6（强制迁移 GitHub 下载实现路径）。
