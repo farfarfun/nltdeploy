@@ -34,6 +34,14 @@ else
   exit 1
 fi
 
+if [[ -f "${SCRIPT_DIR}/../lib/nlt-progress.sh" ]]; then
+  # shellcheck source=../lib/nlt-progress.sh
+  source "${SCRIPT_DIR}/../lib/nlt-progress.sh"
+elif [[ -f "${SCRIPT_DIR}/../../lib/nlt-progress.sh" ]]; then
+  # shellcheck source=../../lib/nlt-progress.sh
+  source "${SCRIPT_DIR}/../../lib/nlt-progress.sh"
+fi
+
 NEW_API_GITHUB_REPO="${NEW_API_GITHUB_REPO:-QuantumNous/new-api}"
 NEW_API_SERVICE_HOME="${NEW_API_SERVICE_HOME:-${HOME}/opt/new-api}"
 NEW_API_DATA_DIR="${NEW_API_DATA_DIR:-${NEW_API_SERVICE_HOME}/data}"
@@ -196,7 +204,12 @@ _download_install() {
   echo "    ${url}" >&2
   tmp="$(mktemp)"
   trap 'rm -f "${tmp}"' RETURN
-  _nlt_github_download_curl -fsSL "$url" -o "${tmp}"
+  _nlt_github_download_print_accel_hint
+  if declare -F nlt_pb_curl_to_file >/dev/null 2>&1; then
+    NLT_PB_LABEL="new-api ${tag}" nlt_pb_curl_to_file "$url" "${tmp}" || die "下载失败: ${url}"
+  else
+    _nlt_github_download_curl -fsSL "$url" -o "${tmp}"
+  fi
   mkdir -p "${NEW_API_SERVICE_HOME}/bin"
   install -m 0755 "${tmp}" "${NEW_API_BIN}"
   [[ -x "${NEW_API_BIN}" ]] || die "安装后二进制不可执行: ${NEW_API_BIN}"

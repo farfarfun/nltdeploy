@@ -32,6 +32,14 @@ else
   exit 1
 fi
 
+if [[ -f "${SCRIPT_DIR}/../lib/nlt-progress.sh" ]]; then
+  # shellcheck source=../lib/nlt-progress.sh
+  source "${SCRIPT_DIR}/../lib/nlt-progress.sh"
+elif [[ -f "${SCRIPT_DIR}/../../lib/nlt-progress.sh" ]]; then
+  # shellcheck source=../../lib/nlt-progress.sh
+  source "${SCRIPT_DIR}/../../lib/nlt-progress.sh"
+fi
+
 CODE_SERVER_SERVICE_HOME="${CODE_SERVER_SERVICE_HOME:-${HOME}/opt/code-server}"
 CODE_SERVER_BIND="${CODE_SERVER_BIND:-127.0.0.1:8080}"
 # status 探测用；未单独设置时从 BIND 取端口
@@ -134,7 +142,12 @@ _download_install() {
   echo "    ${url}" >&2
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "${tmpdir}"' RETURN
-  _nlt_github_download_curl -fsSL "$url" -o "${tmpdir}/code-server.tgz"
+  _nlt_github_download_print_accel_hint
+  if declare -F nlt_pb_curl_to_file >/dev/null 2>&1; then
+    NLT_PB_LABEL="code-server v${ver}" nlt_pb_curl_to_file "$url" "${tmpdir}/code-server.tgz" || die "下载失败: ${url}"
+  else
+    _nlt_github_download_curl -fsSL "$url" -o "${tmpdir}/code-server.tgz"
+  fi
   rm -rf "${CODE_SERVER_SERVICE_HOME}/lib" "${CODE_SERVER_SERVICE_HOME}/bin" 2>/dev/null || true
   mkdir -p "${CODE_SERVER_SERVICE_HOME}"
   tar -xzf "${tmpdir}/code-server.tgz" -C "${CODE_SERVER_SERVICE_HOME}" --strip-components=1

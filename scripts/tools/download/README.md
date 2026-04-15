@@ -24,6 +24,10 @@
 
 **不会改写**：非 `https://` 的 URL、不在白名单内的主机、已是 hub 前缀开头的 URL（避免双写）。
 
+**大文件下载进度条**：`nlt-new-api` / `nlt-code-server` 的 `install` / `update` 在已 `source` 到 `nlt-progress.sh` 时，会用 **`nlt_pb_curl_to_file`** 拉取 Release 资产（stdout 为 TTY 时显示条形进度；否则仅周期性字节日志）。
+
+**直连提示**：未配置任何加速变量时，上述服务在下载前会向 stderr 打一行说明；不需要可设 **`NLTDEPLOY_GITHUB_DOWNLOAD_HINT=0`**。
+
 ## 识别的主机（小写比较）
 
 - `github.com` / `www.github.com`
@@ -39,7 +43,7 @@ source /path/to/scripts/lib/nlt-github-download.sh
 _nlt_github_download_resolve_url "https://raw.githubusercontent.com/…"
 ```
 
-（未自动并入 `nlt-common.sh`，避免默认加载面过大。）
+（`nlt-common.sh` 也会 `source` 本库，以便 `_nlt_ensure_gum` 等路径统一走同一套 URL 改写。）
 
 ## 示例
 

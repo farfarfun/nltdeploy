@@ -115,3 +115,11 @@ _nlt_github_download_curl() {
   done
   curl "${args[@]}"
 }
+
+# 未启用任何镜像/前缀策略时，向 stderr 打一行说明（NLTDEPLOY_GITHUB_DOWNLOAD_HINT=0 可关）。
+_nlt_github_download_print_accel_hint() {
+  [[ "${NLTDEPLOY_GITHUB_DOWNLOAD_HINT:-1}" == "0" ]] && return 0
+  if [[ -n "${NLTDEPLOY_GITHUB_HUB_PROXY_PREFIX:-}" ]]; then return 0; fi
+  if [[ "${NLTDEPLOY_GITHUB_DOWNLOAD_MODE:-off}" != "off" ]]; then return 0; fi
+  printf '%s\n' "提示: 当前为 GitHub 直连下载。受限网络可设置 NLTDEPLOY_GITHUB_HUB_PROXY_PREFIX，或 NLTDEPLOY_GITHUB_DOWNLOAD_MODE=mirror_raw 与 NLTDEPLOY_GITHUB_RAW_MIRROR_BASE（见 scripts/tools/download/README.md）。NLTDEPLOY_GITHUB_DOWNLOAD_HINT=0 可隐藏本行。" >&2
+}
