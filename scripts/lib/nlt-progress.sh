@@ -63,10 +63,12 @@ _nlt_pb_parse_content_length() {
 
 # nlt_pb_render current_bytes total_bytes label start_epoch
 # total_bytes=0 表示总长未知：条形为不确定样式，百分比与 ETA 为 —
+# 默认条形字符为单宽 ASCII（# / -），避免在 CJK/UTF-8 终端上 █/░ 被计为双宽列
+# 导致 \r 重绘错位、行尾出现“漂移”块字符。需要 Unicode 块时可设 NLT_PB_USE_UNICODE=1。
 nlt_pb_render() {
   local cur="${1:-0}" total="${2:-0}" label="${3:-}" start="${4:-0}"
   local now cols barw filled pct elapsed rate eta rem slot span
-  local cur_h total_h rate_h line bar i ch color denom
+  local cur_h total_h rate_h line bar i color denom maxlab ch_f ch_e
 
   [[ "${cur}" =~ ^[0-9]+$ ]] || cur=0
   [[ "${total}" =~ ^[0-9]+$ ]] || total=0
@@ -83,9 +85,25 @@ nlt_pb_render() {
   fi
 
   cols="$(_nlt_pb_cols)"
-  barw=$((cols - 52))
-  [[ "$barw" -lt 12 ]] && barw=12
-  [[ "$barw" -gt 40 ]] && barw=40
+  # 为右侧统计、括号与标签预留列；避免整行超过终端宽度导致折行错乱
+  maxlab=$((cols - 58))
+  [[ "$maxlab" -lt 10 ]] && maxlab=10
+  if [[ "${#label}" -gt "$maxlab" ]]; then
+    label="${label:0:$((maxlab - 3))}..."
+  fi
+
+  barw=$((cols - 56))
+  [[ "$barw" -lt 8 ]] && barw=8
+  [[ "$barw" -gt 32 ]] && barw=32
+
+  if [[ "${NLT_PB_USE_UNICODE:-}" == "1" ]]; then
+    ch_f=$'█'
+    ch_e=$'░'
+  else
+    ch_f='#'
+    ch_e='-'
+  fi
+
   denom=$((barw - 1))
   [[ "$denom" -lt 1 ]] && denom=1
 
@@ -131,10 +149,9 @@ nlt_pb_render() {
       if [[ "$i" -lt "$filled" ]]; then
         color=$((39 + (i * 6 / denom)))
         [[ "$color" -gt 45 ]] && color=45
-        ch=$'█'
-        bar+="$(printf '\033[38;5;%dm%s' "$color" "$ch")"
+        bar+="$(printf '\033[38;5;%dm%s\033[0m' "$color" "$ch_f")"
       else
-        bar+=$'\033[38;5;238m░'
+        bar+="$(printf '\033[38;5;238m%s\033[0m' "$ch_e")"
       fi
     done
   else
@@ -142,10 +159,9 @@ nlt_pb_render() {
       if [[ "$i" -ge "$slot" && "$i" -lt $((slot + span)) ]]; then
         color=$((39 + (i * 6 / denom)))
         [[ "$color" -gt 45 ]] && color=45
-        ch=$'█'
-        bar+="$(printf '\033[38;5;%dm%s' "$color" "$ch")"
+        bar+="$(printf '\033[38;5;%dm%s\033[0m' "$color" "$ch_f")"
       else
-        bar+=$'\033[38;5;238m░'
+        bar+="$(printf '\033[38;5;238m%s\033[0m' "$ch_e")"
       fi
     done
   fi
