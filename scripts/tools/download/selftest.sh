@@ -68,4 +68,10 @@ _run "not_github" "https://example.com/path" "https://example.com/path" \
 _run "mirror_raw" "https://raw.githubusercontent.com/o/r/v/f.txt" \
   "https://mirror.example/ghraw/o/r/v/f.txt" "" "mirror_raw" "https://mirror.example/ghraw"
 
+# 5) hub：已是前缀开头则不再双写
+_run "hub_no_double" \
+  "https://proxy.example/https://https://github.com/x/y" \
+  "https://proxy.example/https://https://github.com/x/y" \
+  "https://proxy.example/https://" "" ""
+
 echo "selftest OK"

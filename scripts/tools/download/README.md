@@ -1,35 +1,67 @@
-# nlt-download（GitHub 友好下载）
+# nlt-download（GitHub 下载 URL 加速）
 
-## 作用
+对 **`curl` 参数中的 `https://` URL** 在调用前做 **可选** 改写，仅作用于常见 GitHub 主机；未配置环境变量时与直连 `curl` 行为一致。
 
-对 **GitHub 族 HTTPS URL**（`github.com` / `raw.githubusercontent.com` / `api.github.com`）在调用 `curl` 前做 **可选** URL 改写；其它 URL 原样透传。与 **`scripts/lib/nlt-github-download.sh`** 同源：服务脚本应 **`source` 该库并调用 `_nlt_github_download_curl`**，或直接使用 **`nlt-download curl …`**。
+## 子命令
 
-## 环境变量
+| 子命令 | 说明 |
+|--------|------|
+| `curl …` | 扫描参数中的 `https://…` 字符串，对命中 GitHub 白名单的项调用 `_nlt_github_download_resolve_url` 后 **`exec curl`**（退出码为 `curl` 的退出码）。 |
+| `resolve-url <url>` | 打印一行改写结果（便于脚本与排障）。 |
+| `install` / `update` / `reinstall` / `uninstall` | 本工具随 **nltdeploy** 安装到 `libexec`；此处仅输出说明。`NONINTERACTIVE=1` 且 `install` 时会运行内置 `selftest.sh`。 |
 
-| 变量 | 说明 |
-|------|------|
-| `NLTDEPLOY_GITHUB_HUB_PROXY_PREFIX` | 非空时优先：将完整原始 URL 拼在该前缀之后（类 ghproxy）。 |
-| `NLTDEPLOY_GITHUB_DOWNLOAD_MODE` | `off`（默认）\| `mirror_raw` \| `hub_proxy` |
-| `NLTDEPLOY_GITHUB_RAW_MIRROR_BASE` | `mirror_raw` 下替换 `raw.githubusercontent.com` 的前缀 |
+无参（且未设置 `NONINTERACTIVE=1`）时：安装 **gum**（若缺失）后进入简单 gum 菜单。
 
-未设置时行为与直连 `curl` 一致。
+## 环境变量与优先级
 
-## 用法
+1. **`NLTDEPLOY_GITHUB_HUB_PROXY_PREFIX`**（非空时 **最高**）：将 **完整原始 URL** 直接拼在该前缀之后（常见「代理网关」形态，例如 `https://<占位镜像域名>/https://` + `https://github.com/...`）。**占位域名可用性与合规由用户自行评估**；下文示例仅说明格式。
+2. **`NLTDEPLOY_GITHUB_DOWNLOAD_MODE=mirror_raw`** 且设置了 **`NLTDEPLOY_GITHUB_RAW_MIRROR_BASE`**：仅对 **`raw.githubusercontent.com`** 将路径段拼到该前缀之后（`https://raw.githubusercontent.com/o/r/branch/file` → `<base>/o/r/branch/file`，其中 `base` 末尾斜杠可有可无）。
+3. **默认**：`NLTDEPLOY_GITHUB_DOWNLOAD_MODE` 未设或 `off` 时 **不改写**。
+
+若设置 `NLTDEPLOY_GITHUB_DOWNLOAD_MODE=hub_proxy` 却 **未** 设置 `NLTDEPLOY_GITHUB_HUB_PROXY_PREFIX`，会向 stderr 提示并跳过改写。
+
+发生改写时，会向 **stderr** 打印一行：`[nlt-download] URL rewrite (…) : <原> -> <新>`。
+
+**不会改写**：非 `https://` 的 URL、不在白名单内的主机、已是 hub 前缀开头的 URL（避免双写）。
+
+## 识别的主机（小写比较）
+
+- `github.com` / `www.github.com`
+- `raw.githubusercontent.com`
+- `api.github.com`
+
+## 库复用
+
+其它 Bash 脚本可：
 
 ```bash
-# 已安装 nltdeploy（PATH 含 ~/.local/nltdeploy/bin）
-nlt-download curl -fsSL "https://api.github.com/repos/OWNER/REPO/releases/latest"
+source /path/to/scripts/lib/nlt-github-download.sh
+_nlt_github_download_resolve_url "https://raw.githubusercontent.com/…"
+```
 
-# 仅看改写结果
-nlt-download resolve-url "https://raw.githubusercontent.com/foo/bar/HEAD/file.txt"
+（未自动并入 `nlt-common.sh`，避免默认加载面过大。）
+
+## 示例
+
+```bash
+# 关闭加速（默认）
+nlt-download resolve-url https://github.com/foo/bar
+# → 原样输出
+
+# 类 ghproxy：前缀 + 完整 URL（请替换为你信任且可用的网关域名）
+export NLTDEPLOY_GITHUB_HUB_PROXY_PREFIX='https://ghproxy.example/https://'
+nlt-download curl -fsSL https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/README.md -o /tmp/README.md
+
+# 仅 raw 走镜像前缀（示例 base 为占位；镜像布局需与你的服务商文档一致）
+export NLTDEPLOY_GITHUB_DOWNLOAD_MODE=mirror_raw
+export NLTDEPLOY_GITHUB_RAW_MIRROR_BASE='https://mirror.example/gh-raw'
+nlt-download resolve-url https://raw.githubusercontent.com/o/r/v/file.txt
 ```
 
 ## 自测
 
+仓库内：
+
 ```bash
-NONINTERACTIVE=1 ./setup.sh install   # 会跑 selftest.sh
+bash scripts/tools/download/selftest.sh
 ```
-
-## 设计文档
-
-仓库内：`docs/superpowers/specs/2026-04-15-war-24-github-download-tool-design.md`
