@@ -70,7 +70,7 @@ usage() {
   onboard     首次配置（交互）；NONINTERACTIVE=1 时执行 onboard --yes
   stop        停止进程
   restart     stop 后 start
-  status      PID 与 HTTP 健康检查 http://127.0.0.1:${PAPERCLIP_PORT}/api/health
+  status      PID 与 HTTP 健康检查 http://0.0.0.0:${PAPERCLIP_PORT}/api/health
   uninstall   停止进程并删除 ${PAPERCLIP_SERVICE_HOME}（不可逆，有确认）
 
 说明: 上游在无实例 config（默认 ${PAPERCLIP_HOME}/instances/<id>/config.json）且非 TTY 时不会自动 onboard；start 会尝试用 script(1)+onboard --yes 生成配置。
@@ -117,6 +117,7 @@ ensure_paperclip_workspaces_symlink() {
 }
 
 paperclip_export_runtime_env() {
+  export HOST=0.0.0.0
   export PORT="${PAPERCLIP_PORT}"
   export PAPERCLIP_HOME
   export PAPERCLIP_WORKSPACE
@@ -235,7 +236,7 @@ process.stdout.write(name + "\t" + ver + "\n");
 }
 
 paperclip_curl_health_http_code() {
-  curl -sS -o /dev/null -w '%{http_code}' -m 3 "http://127.0.0.1:${PAPERCLIP_PORT}/api/health" 2>/dev/null || echo "000"
+  curl -sS -o /dev/null -w '%{http_code}' -m 3 "http://0.0.0.0:${PAPERCLIP_PORT}/api/health" 2>/dev/null || echo "000"
 }
 
 # 返回 0=健康；1=超时仍存活；2=进程已退出
@@ -431,7 +432,7 @@ cmd_start() {
   fi
   rm -f "$PID_FILE"
   echo "==> 启动 Paperclip（pnpm paperclipai run），日志: ${LOG_FILE}" >&2
-  echo "    默认 UI/API: http://127.0.0.1:${PAPERCLIP_PORT}" >&2
+  echo "    默认 UI/API: http://0.0.0.0:${PAPERCLIP_PORT}" >&2
   pushd "${PAPERCLIP_SRC}" >/dev/null
   paperclip_export_runtime_env
   nohup pnpm paperclipai run >>"${LOG_FILE}" 2>&1 &
@@ -448,7 +449,7 @@ cmd_start() {
     echo "已启动 PID ${cpid}（已跳过 HTTP 健康检查）"
     return 0
   fi
-  echo "==> 等待 http://127.0.0.1:${PAPERCLIP_PORT}/api/health 就绪（最长 ${PAPERCLIP_START_HEALTH_TIMEOUT_SEC:-60}s）…" >&2
+  echo "==> 等待 http://0.0.0.0:${PAPERCLIP_PORT}/api/health 就绪（最长 ${PAPERCLIP_START_HEALTH_TIMEOUT_SEC:-60}s）…" >&2
   local wr=0
   paperclip_wait_ready "$cpid" || wr=$?
   if [[ "$wr" -eq 0 ]]; then
@@ -521,8 +522,8 @@ cmd_status() {
   fi
   if command -v curl >/dev/null 2>&1; then
     echo ""
-    echo "==> GET http://127.0.0.1:${PAPERCLIP_PORT}/api/health"
-    curl -sS -m 3 "http://127.0.0.1:${PAPERCLIP_PORT}/api/health" || echo "（无法连接，可能未启动或端口不同）"
+    echo "==> GET http://0.0.0.0:${PAPERCLIP_PORT}/api/health"
+    curl -sS -m 3 "http://0.0.0.0:${PAPERCLIP_PORT}/api/health" || echo "（无法连接，可能未启动或端口不同）"
     echo ""
   fi
 }
