@@ -7,13 +7,13 @@
 #   ./setup.sh              # gum 菜单
 #   ./setup.sh install      # 下载二进制到 ${NEW_API_SERVICE_HOME}/bin/new-api
 #   ./setup.sh update       # 重新下载（同 install）
-#   ./setup.sh start        # 后台启动（工作目录为数据目录，默认端口 3000）
+#   ./setup.sh start        # 后台启动（工作目录为数据目录，默认端口 8801）
 #   ./setup.sh stop | restart | status | uninstall
 #
 # 环境变量：
 #   NEW_API_SERVICE_HOME   安装根（默认 ~/opt/new-api），内含 bin/new-api、data/（SQLite 等工作目录）
 #   NEW_API_DATA_DIR       运行时的 cwd（默认 ${NEW_API_SERVICE_HOME}/data），库文件等写在此目录
-#   NEW_API_PORT / PORT    监听端口（启动时 export PORT；默认 3000，与上游一致）
+#   NEW_API_PORT / PORT    监听端口（启动时 export PORT；默认 8801，可覆盖）
 #   NEW_API_VERSION        强制版本，如 0.12.6 或 v0.12.6（不设则从 Releases 解析）
 #   NEW_API_GITHUB_REPO    owner/repo（默认 QuantumNous/new-api）
 #   NONINTERACTIVE=1
@@ -45,7 +45,7 @@ fi
 NEW_API_GITHUB_REPO="${NEW_API_GITHUB_REPO:-QuantumNous/new-api}"
 NEW_API_SERVICE_HOME="${NEW_API_SERVICE_HOME:-${HOME}/opt/new-api}"
 NEW_API_DATA_DIR="${NEW_API_DATA_DIR:-${NEW_API_SERVICE_HOME}/data}"
-NEW_API_PORT="${NEW_API_PORT:-3000}"
+NEW_API_PORT="${NEW_API_PORT:-8801}"
 
 NEW_API_RUN_DIR="${NEW_API_SERVICE_HOME}/run"
 NEW_API_LOG_DIR="${NEW_API_SERVICE_HOME}/log"

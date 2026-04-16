@@ -154,7 +154,7 @@ cmd_status() {
   pid_cs="$(read_pid_file "${CODE_SERVER_SERVICE_HOME}/run/code-server.pid")"
 
   NEW_API_SERVICE_HOME="${NEW_API_SERVICE_HOME:-${HOME}/opt/new-api}"
-  NEW_API_PORT="${NEW_API_PORT:-3000}"
+  NEW_API_PORT="${NEW_API_PORT:-8801}"
   pid_na="$(read_pid_file "${NEW_API_SERVICE_HOME}/run/new-api.pid")"
 
   local ts flower_url cel_wbf cel_pids cel_probe
