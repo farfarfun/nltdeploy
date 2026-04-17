@@ -23,7 +23,8 @@ usage() {
 
   推荐主入口（替代在文档中单独强调 nlt-pip-sources / nlt-python-env）:
     pip | pip-sources     pip 镜像与源配置（委派到 pip-sources）
-    python | python-env   uv 与 Python 虚拟环境（委派到 python-env）
+    uv                    Astral 官方脚本安装 / 升级 uv（与 python-env 内嵌安装并存；对外请走本入口）
+    python | python-env   uv 与 Python 虚拟环境（委派到 python-env；会按需自动装 uv）
     go                    Go 官方包安装（scripts/dev/go/setup.sh）
     rust                  rustup 安装 / 升级（scripts/dev/rust/setup.sh）
     nodejs                Node.js 官方包（scripts/dev/nodejs/setup.sh）
@@ -66,6 +67,7 @@ _pick_menu() {
   fi
   gum choose --header "nlt-dev — 选择工具" \
     "pip（pip 源 / 镜像）" \
+    "uv（Astral 安装器）" \
     "python（uv / 虚拟环境）" \
     "go" \
     "rust（rustup）" \
@@ -81,6 +83,7 @@ main() {
     if pick="$(_pick_menu)"; then
       case "$pick" in
         pip（*) cmd="pip" ;;
+        uv（*) cmd="uv" ;;
         python（*) cmd="python" ;;
         go) cmd="go" ;;
         rust（*) cmd="rust" ;;
@@ -108,6 +111,7 @@ main() {
       t2="$(_resolve_tool_setup python-env)" || die "找不到 python-env/setup.sh"
       exec bash "${t2}" "$@"
       ;;
+    uv) _dispatch_child uv "$@" ;;
     go) _dispatch_child go "$@" ;;
     rust) _dispatch_child rust "$@" ;;
     nodejs | node) _dispatch_child nodejs "$@" ;;

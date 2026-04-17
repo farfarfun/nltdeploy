@@ -33,7 +33,9 @@ bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/dev/go/setup.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/dev/rust/setup.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/dev/nodejs/setup.sh" || exit 1
 bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/dev/pnpm/setup.sh" || exit 1
+bash -n "${NLTDEPLOY_ROOT}/libexec/nltdeploy/dev/uv/setup.sh" || exit 1
 NONINTERACTIVE=1 "${NLTDEPLOY_ROOT}/bin/nlt-dev" --help >/dev/null || exit 1
+NONINTERACTIVE=1 "${NLTDEPLOY_ROOT}/bin/nlt-dev" uv --help >/dev/null || exit 1
 NONINTERACTIVE=1 "${NLTDEPLOY_ROOT}/bin/nlt-download" resolve-url "https://github.com/foo/bar" | grep -q "https://github.com/foo/bar" || exit 1
 NONINTERACTIVE=1 "${NLTDEPLOY_ROOT}/bin/nlt-port-kill" list 59999 >/dev/null || exit 1
 "${NLTDEPLOY_ROOT}/bin/nlt-services" status --no-http >/dev/null || exit 1

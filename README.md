@@ -4,7 +4,7 @@
 
 ## 项目概述
 
-- **dev**（`nlt-dev`）：**推荐的开发工具统一入口**（`scripts/dev/`）。将 pip 镜像、Python/uv、Go、Rust、Node.js、pnpm 的安装与升级叙事集中在一处；`nlt-dev pip` / `nlt-dev python` 委派到既有 `pip-sources` / `python-env`。`nlt-pip-sources` 与 `nlt-python-env` 仍由 `install.sh` 生成以保持兼容，新文档请以 `nlt-dev` 为主路径。详见 [`scripts/dev/README.md`](scripts/dev/README.md)。
+- **dev**（`nlt-dev`）：**推荐的开发工具统一入口**（`scripts/dev/`）。将 pip 镜像、**uv 本体**（`nlt-dev uv`）、Python/uv 虚拟环境、Go、Rust、Node.js、pnpm 的安装与升级叙事集中在一处；`nlt-dev pip` / `nlt-dev python` 委派到既有 `pip-sources` / `python-env`，**`nlt-dev uv`** 走 Astral 官方安装脚本并支持 **`uv self update` 升级**。不另增 `nlt-uv` 等对外别名。`nlt-pip-sources` 与 `nlt-python-env` 仍由 `install.sh` 生成以保持兼容，新文档请以 `nlt-dev` 为主路径。详见 [`scripts/dev/README.md`](scripts/dev/README.md)。
 - **pip-sources**：测速并写入 pip 配置，保留已有认证源等。
 - **python-env**：用 [uv](https://github.com/astral-sh/uv) 建虚拟环境并安装常用基础包。
 - **airflow**：本机 **Apache Airflow 3.x**（安装、启停、DAG 脚手架、用户与 HTTP 触发等）；依赖 gum，脚本内会按 README 同款方式拉取安装。另提供 **`run`**：与 `start` 同环境的前台 `standalone`（不写 PID；后台已在跑时拒绝）。
@@ -94,7 +94,7 @@ bash tests/progress_smoke.sh
 
 | 安装后的命令 | 对应原 scripts 用法 |
 |-------------|---------------------|
-| **`nlt-dev`**（推荐） | **`scripts/dev/setup.sh`** — `pip` / `python` 委派到 tools；`go` / `rust` / `nodejs` / `pnpm` 见 `scripts/dev/*`；无参时 gum 菜单 |
+| **`nlt-dev`**（推荐） | **`scripts/dev/setup.sh`** — `pip` / **`uv`** / `python` 委派或子脚本；`go` / `rust` / `nodejs` / `pnpm` 见 `scripts/dev/*`；无参时 gum 菜单 |
 | `nlt-pip-sources` | `scripts/tools/pip-sources/setup.sh`（与 `nlt-dev pip` 等价；无参时 gum 选 install/update/reinstall/uninstall） |
 | `nlt-python-env` | `scripts/tools/python-env/setup.sh`（与 `nlt-dev python` 等价；无参时 gum 选子命令；见脚本头） |
 | `nlt-airflow` | `scripts/services/airflow/setup.sh` 全量子命令；`install` 首次/升级安装；`start` / `run`（前台）/ `stop` / `status` / `update` 等；无参为 gum 菜单 |
@@ -132,7 +132,8 @@ nltdeploy/
 │   │   ├── go/setup.sh
 │   │   ├── rust/setup.sh
 │   │   ├── nodejs/setup.sh
-│   │   └── pnpm/setup.sh
+│   │   ├── pnpm/setup.sh
+│   │   └── uv/setup.sh
 │   ├── tools/                          # 工具 / 环境类（非长期服务进程）
 │   │   ├── pip-sources/
 │   │   │   ├── setup.sh
@@ -312,7 +313,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/github
 
 ## 使用建议
 
-1. 首次：已装 `install.sh` 时推荐 **`nlt-dev pip`** → **`nlt-dev python`**（与 pip-sources → python-env 等价）；若要用 Airflow / GitHub 诊断交互界面，可先 **utils**（装 gum）。
+1. 首次：已装 `install.sh` 时推荐 **`nlt-dev pip`** → **`nlt-dev uv`**（显式安装/升级 Astral uv）→ **`nlt-dev python`**（与 pip-sources → python-env 等价；仅建环境时可跳过 `uv` 子命令，python-env 会按需自动装 uv）；若要用 Airflow / GitHub 诊断交互界面，可先 **utils**（装 gum）。
 2. 网络或镜像变化时可重跑 **pip-sources**。
 3. **airflow** 仅面向 Airflow **3.x**，与 2.x 不混用。
 
