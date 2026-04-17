@@ -6,7 +6,7 @@
 # 与 .cursor/agents/software-ops.md 一致：gum 安装在 ~/opt/gum/{bin,etc,data,log}。
 #
 # 用法：
-#   ./setup.sh              # 默认：gum（同 gum）
+#   ./setup.sh              # 交互 TTY：gum 菜单（缺 gum 时先自动安装）；否则等同 gum
 #   ./setup.sh gum [--force]
 #   ./setup.sh aliases      # 写入 ll / la / lla（已有标记则跳过）
 #   ./setup.sh all [--force]   # gum 再 aliases
@@ -22,7 +22,13 @@
 set -euo pipefail
 
 _UTILS_INIT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if [[ -f "${_UTILS_INIT_DIR}/../lib/nlt-github-download.sh" ]]; then
+if [[ -f "${_UTILS_INIT_DIR}/../lib/nlt-common.sh" ]]; then
+  # shellcheck source=../lib/nlt-common.sh
+  source "${_UTILS_INIT_DIR}/../lib/nlt-common.sh"
+elif [[ -f "${_UTILS_INIT_DIR}/../../lib/nlt-common.sh" ]]; then
+  # shellcheck source=../../lib/nlt-common.sh
+  source "${_UTILS_INIT_DIR}/../../lib/nlt-common.sh"
+elif [[ -f "${_UTILS_INIT_DIR}/../lib/nlt-github-download.sh" ]]; then
   # shellcheck source=../lib/nlt-github-download.sh
   source "${_UTILS_INIT_DIR}/../lib/nlt-github-download.sh"
 elif [[ -f "${_UTILS_INIT_DIR}/../../lib/nlt-github-download.sh" ]]; then
@@ -39,6 +45,9 @@ usage() {
   cat <<EOF
 用法: setup.sh [command [选项]]
 
+无参数:
+  交互式终端: 进入 gum 菜单（缺 gum 时先按 README 同款 curl 安装）；否则等同「gum」子命令（管道 / NONINTERACTIVE=1 等）。
+
 命令:
   gum [--force]    安装 gum 到 ${GUM_HOME}/bin（默认命令）
   aliases          向 ~/.zshrc / ~/.bashrc / ~/.bash_profile 写入 ll、la、lla（已存在标记则跳过）
@@ -47,6 +56,71 @@ usage() {
 
 环境变量: GUM_HOME, GUM_TAG, GUM_USE_BREW, SKIP_GUM_SHELL_PROFILE, SKIP_UTILS_SHELL_ALIASES, NONINTERACTIVE
 EOF
+}
+
+# 交互菜单前：保证 PATH 上有 gum（与 lib/nlt-common.sh 中 _nlt_ensure_gum 行为一致；单文件 curl 场景无 nlt-common 时内联）。
+_ensure_gum_for_interactive_menu() {
+  if declare -F _nlt_ensure_gum >/dev/null 2>&1; then
+    _nlt_ensure_gum
+    return $?
+  fi
+  export PATH="${HOME}/opt/gum/bin:${PATH}"
+  command -v gum >/dev/null 2>&1 && return 0
+  if [[ -x "${HOME}/opt/gum/bin/gum" ]]; then
+    export PATH="${HOME}/opt/gum/bin:${PATH}"
+    command -v gum >/dev/null 2>&1 && return 0
+  fi
+  command -v curl >/dev/null 2>&1 || {
+    echo "错误: 需要 curl 以安装 gum。" >&2
+    return 1
+  }
+  local _ubase _uurl
+  _ubase="${NLTDEPLOY_RAW_BASE:-${nltdeploy_RAW_BASE:-https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD}}"
+  _uurl="${_ubase}/scripts/tools/utils/setup.sh"
+  echo "未检测到 gum，执行: curl -LsSf ${_uurl} | NONINTERACTIVE=1 bash -s -- gum" >&2
+  NONINTERACTIVE=1 _nlt_github_download_curl -LsSf "${_uurl}" | NONINTERACTIVE=1 bash -s -- gum || {
+    echo "错误: gum 安装失败（网络或 NLTDEPLOY_RAW_BASE / nltdeploy_RAW_BASE）。" >&2
+    return 1
+  }
+  export PATH="${HOME}/opt/gum/bin:${PATH}"
+  command -v gum >/dev/null 2>&1 || {
+    echo "错误: gum 仍未可用（预期 ~/opt/gum/bin）。" >&2
+    return 1
+  }
+}
+
+_interactive_main() {
+  while true; do
+    local pick
+    pick="$(gum choose --header "nlt-utils" \
+      "安装 / 更新 gum（${GUM_HOME}）" \
+      "写入 ll / la / lla 别名" \
+      "gum 与别名（依次执行）" \
+      "查看帮助" \
+      "退出")" || return 0
+    [[ -z "${pick}" ]] && return 0
+    case "${pick}" in
+      *退出) return 0 ;;
+      *帮助)
+        usage
+        echo ""
+        ;;
+      *别名*)
+        cmd_shell_aliases
+        ;;
+      *依次*)
+        cmd_all ""
+        ;;
+      *gum*)
+        cmd_gum ""
+        ;;
+      *)
+        usage
+        echo ""
+        ;;
+    esac
+    echo ""
+  done
 }
 
 # ---------- software-ops：环境感知 / 步骤提示 / 确认（有 gum 时优先 gum）----------
@@ -466,21 +540,30 @@ cmd_gum() {
 }
 
 main() {
-  case "${1:-gum}" in
+  if [[ $# -eq 0 ]]; then
+    if [[ "${NONINTERACTIVE:-0}" == "1" ]] || [[ ! -t 0 ]]; then
+      cmd_gum ""
+      return 0
+    fi
+    _ensure_gum_for_interactive_menu || exit 1
+    _interactive_main
+    return 0
+  fi
+
+  case "${1:-}" in
     gum)
-      # 无参数时 $1 为空，不能 shift（会失败并因 set -e 静默退出）
-      [[ "${1:-}" == "gum" ]] && shift
+      shift
       cmd_gum "${1:-}"
       ;;
     aliases)
-      [[ "${1:-}" == "aliases" ]] && shift
+      shift
       cmd_shell_aliases
       ;;
     help | -h | --help)
       usage
       ;;
     all)
-      [[ "${1:-}" == "all" ]] && shift
+      shift
       cmd_all "${1:-}"
       ;;
     *)
