@@ -212,7 +212,7 @@ cmd_status() {
   echo "  • 安装路径: airflow ${AIRFLOW_HOME} | celery ${CELERY_HOME} | paperclip ${PAPERCLIP_SERVICE_HOME} | code-server ${CODE_SERVER_SERVICE_HOME} | new-api ${NEW_API_SERVICE_HOME}"
   echo "  • 详情: nlt-airflow / nlt-celery / nlt-paperclip / nlt-code-server / nlt-new-api 各 status"
   echo ""
-  echo "工具（无统一守护进程）: nlt-pip-sources / nlt-python-env / nlt-utils / nlt-github-net — 请用各命令单独查看。"
+  echo "工具（无统一守护进程）: nlt-dev（推荐入口）/ nlt-pip-sources / nlt-python-env / nlt-utils / nlt-github-net — 请用各命令单独查看。"
   echo ""
 }
 

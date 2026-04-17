@@ -4,20 +4,20 @@
 
 ## 项目概述
 
+- **dev**（`nlt-dev`）：**推荐的开发工具统一入口**（`scripts/dev/`）。将 pip 镜像、Python/uv、Go、Rust、Node.js、pnpm 的安装与升级叙事集中在一处；`nlt-dev pip` / `nlt-dev python` 委派到既有 `pip-sources` / `python-env`。`nlt-pip-sources` 与 `nlt-python-env` 仍由 `install.sh` 生成以保持兼容，新文档请以 `nlt-dev` 为主路径。详见 [`scripts/dev/README.md`](scripts/dev/README.md)。
 - **pip-sources**：测速并写入 pip 配置，保留已有认证源等。
 - **python-env**：用 [uv](https://github.com/astral-sh/uv) 建虚拟环境并安装常用基础包。
 - **airflow**：本机 **Apache Airflow 3.x**（安装、启停、DAG 脚手架、用户与 HTTP 触发等）；依赖 gum，脚本内会按 README 同款方式拉取安装。另提供 **`run`**：与 `start` 同环境的前台 `standalone`（不写 PID；后台已在跑时拒绝）。
 - **celery**：Celery 安装与 worker/beat/flower 启停、状态；默认 `~/opt/celery`。另提供 **`run` / `run-worker` / `run-beat` / `run-flower`**（前台、不写 PID；`run` 选 all 会拒绝，需多终端分别跑各 `run-*`）。
 - **utils**：安装 **gum**（`~/opt/gum`）与可选 shell 别名（`ll` / `la` / `lla`）。
 - **github-net**：诊断并修复「网页能开但 `git clone` 失败」的常见 HTTPS/SSH 问题。
-- **download**（`nlt-download`）：可选的 GitHub 族 `https` 下载 URL 改写后再 `curl`（环境变量驱动，默认不改写）；见 `scripts/tools/download/README.md`。
-- **download**：`nlt-download` — 对 GitHub 族 HTTPS 下载 URL 做可选镜像/前缀改写后调用 `curl`；仓库内 **new-api / code-server / gum 安装路径** 等已统一经 `_nlt_github_download_curl` / `nlt-github-download.sh` 调用（见 `scripts/tools/download/README.md`）。
+- **download**（`nlt-download`）：对 GitHub 族 HTTPS 下载 URL 做可选镜像/前缀改写后再 `curl`（环境变量驱动，默认不改写）；仓库内 **new-api / code-server / gum 安装路径** 等已统一经 `_nlt_github_download_curl` / `nlt-github-download.sh` 调用（见 `scripts/tools/download/README.md`）。
 - **paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，**默认工作区** **`~/opt/paperclip/workspace`**（环境变量 **`PAPERCLIP_WORKSPACE`**，可改）。`start` 会在实例就绪后尽量把上游 **`~/.paperclip/instances/<id>/workspaces`** 符号链接到该目录（若该 `workspaces` 已非空则跳过）。数据目录另见上游 `~/.paperclip/…`。无实例配置时 **`start` 会先非交互执行 `onboard --yes`**（依赖 `script(1)`）；也可手动 **`nlt-paperclip onboard`**（或 `NONINTERACTIVE=1 nlt-paperclip onboard`）。**`run`** 为同准备下的前台附着（不写 PID；后台已在跑时拒绝）。
 - **code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。**`run`** 为前台附着（`PASSWORD` 与 `start` 一致；不写 PID；后台已在跑时拒绝）。
 - **new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 8801**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。**`run`** 为前台 `PORT` 启动（不写 PID；后台已在跑时拒绝）。
 - **services**（`nlt-services.sh`）：**`nlt-services`** 总入口——**`status`** 汇总各常驻服务 PID/端口/HTTP 探测；**`install`** 先选 **安装 / 卸载** 再选模块（或 `install add|remove <模块>`）；卸载不含 celery、utils（上游无 uninstall）。
 
-仓库内脚本按 **`scripts/tools/`**（工具 / 环境）与 **`scripts/services/`**（常驻服务 + 聚合入口）分层存放，详见下文「目录结构」。
+仓库内脚本按 **`scripts/dev/`**（开发环境统一入口）、**`scripts/tools/`**（工具 / 环境）与 **`scripts/services/`**（常驻服务 + 聚合入口）分层存放，详见下文「目录结构」。
 
 Python 包元数据见根目录 [`pyproject.toml`](pyproject.toml)（MIT）。命令行入口名在元数据中列为 `nltdeploy`，与 `src/` 下模块布局仍在演进；Shell 脚本是当前主力的使用方式。
 
@@ -94,15 +94,15 @@ bash tests/progress_smoke.sh
 
 | 安装后的命令 | 对应原 scripts 用法 |
 |-------------|---------------------|
-| `nlt-pip-sources` | `scripts/tools/pip-sources/setup.sh`（无参时 gum 选 install/update/reinstall/uninstall） |
-| `nlt-python-env` | `scripts/tools/python-env/setup.sh`（无参时 gum 选子命令；见脚本头） |
+| **`nlt-dev`**（推荐） | **`scripts/dev/setup.sh`** — `pip` / `python` 委派到 tools；`go` / `rust` / `nodejs` / `pnpm` 见 `scripts/dev/*`；无参时 gum 菜单 |
+| `nlt-pip-sources` | `scripts/tools/pip-sources/setup.sh`（与 `nlt-dev pip` 等价；无参时 gum 选 install/update/reinstall/uninstall） |
+| `nlt-python-env` | `scripts/tools/python-env/setup.sh`（与 `nlt-dev python` 等价；无参时 gum 选子命令；见脚本头） |
 | `nlt-airflow` | `scripts/services/airflow/setup.sh` 全量子命令；`install` 首次/升级安装；`start` / `run`（前台）/ `stop` / `status` / `update` 等；无参为 gum 菜单 |
 | `nlt-celery` | `scripts/services/celery/setup.sh` 全量子命令；`install` / `update`；`start` / `run` / `run-worker` 等；无参为菜单 |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/tools/utils/setup.sh` … |
 | `nlt-github-net` | `scripts/tools/github-net/setup.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
-| `nlt-download` | `scripts/tools/download/setup.sh`（`curl` / `resolve-url`；与 `scripts/lib/nlt-github-download.sh` 同源；无参 gum） |
+| `nlt-download` | `scripts/tools/download/setup.sh`（`curl` / `resolve-url`；可选 GitHub URL 镜像；与 `scripts/lib/nlt-github-download.sh` 同源；无参 gum；`NONINTERACTIVE=1` + `install` 跑自测） |
 | `nlt-port-kill` | `scripts/tools/port-kill/setup.sh`（`kill` / `list`；可 `source … --lib` 调用 `nlt_kill_port`；无参 gum；`NONINTERACTIVE=1` 跳过确认） |
-| `nlt-download` | `scripts/tools/download/setup.sh`（`curl` / `resolve-url`；可选 GitHub URL 镜像；无参 gum；`NONINTERACTIVE=1` + `install` 跑自测） |
 | `nlt-services` | `scripts/services/nlt-services.sh`（无参 gum；`status`；`install` 先选安装或卸载；非交互：`install add <模块>` / `install remove <模块>`；`status --no-http`） |
 | `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install` / `onboard` / `start` / `run` 等；无参为 gum 菜单 |
 | `nlt-code-server` | `scripts/services/code-server/setup.sh` 全量子命令；`install`（下载解压官方包）、`start` / `run` 等；无参为 gum 菜单 |
@@ -126,6 +126,13 @@ nltdeploy/
 │   │   ├── nlt-common.sh               # _nlt_ensure_gum 等公共片段（各 setup 脚本 source）
 │   │   ├── nlt-github-download.sh      # GitHub 下载 URL 改写（各脚本按需 source）
 │   │   └── nlt-progress.sh             # 可 source 的终端进度条与 curl 下载监视（可选）
+│   ├── dev/                            # 开发工具统一入口（nlt-dev）与多语言安装脚本
+│   │   ├── README.md
+│   │   ├── setup.sh
+│   │   ├── go/setup.sh
+│   │   ├── rust/setup.sh
+│   │   ├── nodejs/setup.sh
+│   │   └── pnpm/setup.sh
 │   ├── tools/                          # 工具 / 环境类（非长期服务进程）
 │   │   ├── pip-sources/
 │   │   │   ├── setup.sh
@@ -157,11 +164,20 @@ nltdeploy/
 │           └── setup.sh                # new-api Release 二进制与启停
 ```
 
-**`scripts/tools/`** 放 pip、Python 环境、gum/别名、GitHub 网络、端口查杀等 **工具向** 脚本；**`scripts/services/`** 放 Airflow、Celery、Paperclip、code-server、new-api 等 **服务向** 脚本及 **`nlt-services.sh`** 聚合入口。建议先跑 tools 再按需装 services；除 pip-sources / python-env 外可按需独立执行。
+**`scripts/dev/`** 放 **`nlt-dev`** 与 Go/Rust/Node/pnpm 等 **语言工具链** 脚本；**`scripts/tools/`** 放 pip、Python 环境、gum/别名、GitHub 网络、端口查杀等 **工具向** 脚本；**`scripts/services/`** 放 Airflow、Celery、Paperclip、code-server、new-api 等 **服务向** 脚本及 **`nlt-services.sh`** 聚合入口。建议已装 `install.sh` 的用户优先 **`nlt-dev`** 配 pip/Python，再按需装 services；除 pip-sources / python-env 外可按需独立执行。
 
 ## 快速开始
 
 ### 1. 配置 pip 源（建议最先执行）
+
+已安装 `nlt-*` 到 PATH 时，推荐：
+
+```bash
+nlt-dev pip
+# 或等价：nlt-pip-sources
+```
+
+仓库内直接执行：
 
 ```bash
 cd scripts/tools/pip-sources
@@ -185,6 +201,15 @@ NONINTERACTIVE=1 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scr
 ```
 
 ### 2. 创建 Python 环境（uv）
+
+已安装 `nlt-*` 到 PATH 时，推荐：
+
+```bash
+nlt-dev python
+# 或等价：nlt-python-env
+```
+
+仓库内直接执行：
 
 ```bash
 cd scripts/tools/python-env
@@ -267,6 +292,7 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/github
 
 | 目录 | 入口文件 | 作用 |
 |------|-----------|------|
+| `dev` | `setup.sh`（`nlt-dev`） | 统一入口：委派 pip/python；Go / Rust / Node.js / pnpm 子脚本 |
 | `tools/pip-sources` | `setup.sh` | 镜像测速、写入 pip 配置、备份 |
 | `tools/python-env` | `setup.sh` | uv、多版本 Python venv、基础包 |
 | `tools/utils` | `setup.sh` | gum 与 shell 便利项 |
@@ -280,12 +306,13 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/github
 
 子目录中的详细说明：
 
+- [开发工具统一入口](scripts/dev/README.md)
 - [pip 源配置](scripts/tools/pip-sources/README.md)
 - [Python 环境创建](scripts/tools/python-env/README.md)
 
 ## 使用建议
 
-1. 首次：**pip-sources** → **python-env**；若要用 Airflow / GitHub 诊断交互界面，可先 **utils**（装 gum）。
+1. 首次：已装 `install.sh` 时推荐 **`nlt-dev pip`** → **`nlt-dev python`**（与 pip-sources → python-env 等价）；若要用 Airflow / GitHub 诊断交互界面，可先 **utils**（装 gum）。
 2. 网络或镜像变化时可重跑 **pip-sources**。
 3. **airflow** 仅面向 Airflow **3.x**，与 2.x 不混用。
 

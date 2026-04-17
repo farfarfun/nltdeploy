@@ -300,6 +300,7 @@ do_install_or_update() {
   mkdir -p "${NLTDEPLOY_ROOT}/bin" "${LIBEXEC}" \
     "${NLTDEPLOY_ROOT}/share/nltdeploy" "${NLTDEPLOY_ROOT}/etc/nltdeploy"
   mkdir -p "${LIBEXEC}/pip-sources" "${LIBEXEC}/python-env" "${LIBEXEC}/port-kill" \
+    "${LIBEXEC}/dev/go" "${LIBEXEC}/dev/rust" "${LIBEXEC}/dev/nodejs" "${LIBEXEC}/dev/pnpm" \
     "${LIBEXEC}/download" \
     "${LIBEXEC}/airflow" "${LIBEXEC}/celery" "${LIBEXEC}/utils" "${LIBEXEC}/github-net" \
     "${LIBEXEC}/paperclip" "${LIBEXEC}/code-server" "${LIBEXEC}/new-api" \
@@ -315,6 +316,21 @@ do_install_or_update() {
 
   _nlt_cp_first "${LIBEXEC}/lib/nlt-github-download.sh" \
     "${SCRIPTS}/lib/nlt-github-download.sh"
+
+  _nlt_cp_first "${LIBEXEC}/dev/setup.sh" \
+    "${SCRIPTS}/dev/setup.sh"
+
+  _nlt_cp_first "${LIBEXEC}/dev/go/setup.sh" \
+    "${SCRIPTS}/dev/go/setup.sh"
+
+  _nlt_cp_first "${LIBEXEC}/dev/rust/setup.sh" \
+    "${SCRIPTS}/dev/rust/setup.sh"
+
+  _nlt_cp_first "${LIBEXEC}/dev/nodejs/setup.sh" \
+    "${SCRIPTS}/dev/nodejs/setup.sh"
+
+  _nlt_cp_first "${LIBEXEC}/dev/pnpm/setup.sh" \
+    "${SCRIPTS}/dev/pnpm/setup.sh"
 
   _nlt_cp_first "${LIBEXEC}/pip-sources/setup.sh" \
     "${SCRIPTS}/tools/pip-sources/setup.sh" \
@@ -371,6 +387,7 @@ do_install_or_update() {
     "${SCRIPTS}/services/services.sh" \
     "${SCRIPTS}/10-services/services.sh"
 
+  _emit_wrapper nlt-dev dev/setup.sh
   _emit_wrapper nlt-pip-sources pip-sources/setup.sh
   _emit_wrapper nlt-python-env python-env/setup.sh
   _emit_wrapper nlt-utils utils/setup.sh
