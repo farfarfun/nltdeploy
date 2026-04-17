@@ -28,6 +28,7 @@
 | `install` | 首次或干净环境下的安装：目录、依赖、数据库迁移（若适用）等。 |
 | `update` | 在保留数据与配置的前提下升级运行时/依赖；不得默认抹掉用户数据。 |
 | `start` | 启动服务（或该域定义的主进程）；需幂等或可检测「已在运行」。 |
+| `run` | 与 `start` **相同的准备与进程语义**，但 **前台附着**（日志走终端，便于排错），**不写 PID**；若该域已由 `start` 在后台运行，应 **拒绝** 并提示先 `stop` 或改用独立配置。 |
 | `stop` | 停止服务。 |
 | `restart` | 等价于 `stop` 再 `start`（可实现为函数组合）。 |
 
@@ -53,7 +54,7 @@
 ### 3.1 统一规则
 
 - **无参数**（或仅 `--help` / `help`）：进入 **gum 驱动的交互**（菜单或分步引导），展示可选子命令。
-- **第一个参数为已知子命令**（如 `install`、`update`、`start`、`stop`、`restart`、`status`、`uninstall` 等）：**跳过 gum 主菜单**，直接执行对应逻辑；后续参数原样传递给该子命令处理函数。
+- **第一个参数为已知子命令**（如 `install`、`update`、`start`、`run`、`stop`、`restart`、`status`、`uninstall` 等）：**跳过 gum 主菜单**，直接执行对应逻辑；后续参数原样传递给该子命令处理函数。
 - **`NONINTERACTIVE=1`**：禁止阻塞式交互；缺参时的默认行为由各域文档写明（例如失败退出或使用安全默认值）。
 
 ### 3.2 与 `bin` 命名的关系（不破坏现有安装）
@@ -97,7 +98,7 @@
 
 ## 6. 验收清单（新增或重构某一域时）
 
-- [ ] 服务：已实现 `install` / `update` / `start` / `stop` / `restart`；文档列出扩展子命令。  
+- [ ] 服务：已实现 `install` / `update` / `start` / `run`（前台；后台已运行时拒绝）/ `stop` / `restart`；文档列出扩展子命令。  
 - [ ] 工具：已实现 `install` / `update` / `reinstall` / `uninstall`。  
 - [ ] 无参数走 gum 交互；带首参子命令时直执行，不经过主菜单。  
 - [ ] 需要 gum 前调用 `_nlt_ensure_gum`，且 gum 已安装时 O(1) 跳过。  
@@ -108,7 +109,7 @@
 
 ## 7. 与现状的差异（迁移说明）
 
-已实现（持续迭代中）：Airflow 增加 **`update`** 并统一 **`_nlt_ensure_gum`**；Celery 增加 **`update`**、无参 **gum** 菜单及 **`NONINTERACTIVE`** 下的 restart 行为；pip / Python 环境 / GitHub 网络工具补齐 **install / update / reinstall / uninstall** 形态与无参 gum 入口（`utils` 仍以安装 gum 为主，未强制四字命令）。若某域仍有 read 交互，可逐步改为 gum。
+已实现（持续迭代中）：Airflow 增加 **`update`** 并统一 **`_nlt_ensure_gum`**；Celery 增加 **`update`**、无参 **gum** 菜单及 **`NONINTERACTIVE`** 下的 restart 行为；pip / Python 环境 / GitHub 网络工具补齐 **install / update / reinstall / uninstall** 形态与无参 gum 入口（`utils` 仍以安装 gum 为主，未强制四字命令）。五类服务域（Paperclip、new-api、code-server、Airflow、Celery）已增加 **`run`（前台）** 语义，见 [WAR-64](/WAR/issues/WAR-64)。若某域仍有 read 交互，可逐步改为 gum。
 
 ---
 
@@ -118,3 +119,4 @@
 |------|------|
 | 2026-04-11 | 首版：工具/服务必选子命令、gum 策略、参数直执行与 bin 命名关系。 |
 | 2026-04-11 | 补充：`scripts/lib/nlt-common.sh`；Airflow/Celery/GitHub/pip/Python-env 按规范首轮改造说明。 |
+| 2026-04-17 | 服务域增加必选子命令 **`run`（前台）**：与 `start` 同语义、不写 PID、后台已运行时拒绝（见 [WAR-64](/WAR/issues/WAR-64)）。 |

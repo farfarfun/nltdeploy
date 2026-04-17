@@ -9,6 +9,7 @@
 #   ./setup.sh install      # 克隆/拉取源码并 pnpm install
 #   ./setup.sh update       # git pull + pnpm install
 #   ./setup.sh start        # 后台启动（pnpm paperclipai run）；无配置时会先非交互生成默认配置；默认轮询 /api/health 校验
+#   ./setup.sh run          # 前台启动（同准备语义，终端附着；不写 PID；后台已在跑时拒绝）
 #   ./setup.sh fix-embedded-postgres [版本]  # 显式安装 @embedded-postgres/<当前平台>（pnpm 常漏装 optional 平台包）；版本可降级
 #   ./setup.sh onboard      # 上游首次配置（NONINTERACTIVE=1 时加 --yes）
 #   ./setup.sh stop / restart / status
@@ -66,6 +67,7 @@ usage() {
   install     克隆 ${PAPERCLIP_REPO_URL} 到 ${PAPERCLIP_SRC}（已存在则 fetch 后 checkout 分支）并执行 pnpm install
   update      git pull 后 pnpm install
   start       后台启动: cd 源码目录 && pnpm paperclipai run（日志 ${LOG_FILE}）；若无实例配置则先 onboard --yes；默认校验 /api/health
+  run         前台启动: 同 start 的准备与端口环境，但终端附着、不写 PID；后台已在跑时拒绝
   fix-embedded-postgres [版本]  在源码根执行 pnpm add，安装/固定 @embedded-postgres/<本机平台>（可传降级版本，或设 PAPERCLIP_EMBEDDED_POSTGRES_PLATFORM_VERSION）
   onboard     首次配置（交互）；NONINTERACTIVE=1 时执行 onboard --yes
   stop        停止进程
@@ -466,6 +468,25 @@ cmd_start() {
   die "启动校验失败。"
 }
 
+cmd_run() {
+  require_node
+  ensure_pnpm
+  [[ -d "${PAPERCLIP_SRC}" && -f "${PAPERCLIP_SRC}/package.json" ]] || die "未安装源码，请先: $0 install"
+  ensure_dirs
+  ensure_paperclip_instance_config
+  ensure_paperclip_workspaces_symlink
+  local existing
+  existing="$(read_pid)"
+  if [[ -n "$existing" ]] && process_alive "$existing"; then
+    die "Paperclip 已在后台运行（PID ${existing}）。请先执行 $0 stop，再使用 run 前台调试。"
+  fi
+  echo "==> 前台启动 Paperclip（pnpm paperclipai run），日志输出至本终端；按 Ctrl+C 结束；不写 PID。" >&2
+  echo "    默认 UI/API: http://0.0.0.0:${PAPERCLIP_PORT}" >&2
+  pushd "${PAPERCLIP_SRC}" >/dev/null
+  paperclip_export_runtime_env
+  exec pnpm paperclipai run
+}
+
 cmd_stop() {
   local pid
   pid="$(read_pid)"
@@ -555,6 +576,7 @@ dispatch() {
     onboard) cmd_onboard "$@" ;;
     fix-embedded-postgres) cmd_fix_embedded_postgres "$@" ;;
     start) cmd_start ;;
+    run) cmd_run ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
     status) cmd_status ;;
@@ -577,7 +599,7 @@ interactive_main() {
   while true; do
     local pick
     pick="$(gum choose --header "选择操作（取消退出）" \
-      "install" "update" "onboard" "fix-embedded-postgres" "start" "stop" "restart" "status" "uninstall" "help" "quit")" || break
+      "install" "update" "onboard" "fix-embedded-postgres" "start" "run" "stop" "restart" "status" "uninstall" "help" "quit")" || break
     [[ -z "$pick" ]] && break
     case "$pick" in
       quit) break ;;

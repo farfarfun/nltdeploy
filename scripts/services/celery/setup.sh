@@ -11,6 +11,8 @@
 #   ./setup.sh start-worker  # 直接启动（非交互）
 #   ./setup.sh start-beat
 #   ./setup.sh start-flower
+#   ./setup.sh run         # 前台：同 start 的 1–4 选择，但 1=all 会拒绝（须多终端 run-*）
+#   ./setup.sh run-worker | run-beat | run-flower   # 前台单组件（无 nohup、不写 PID）
 #   ./setup.sh stop
 #   ./setup.sh restart
 #   ./setup.sh status
@@ -52,6 +54,10 @@ usage() {
   start [1-4]      无参时用 gum 选择；或 1=all, 2=worker, 3=beat, 4=flower
   start-beat       后台启动 Celery beat
   start-flower     后台启动 Flower（Web 监控，需已安装 flower）
+  run [1-4]        前台：无参 gum 同 start；1=all 会拒绝（请分别 run-worker / run-beat / run-flower）
+  run-worker       前台启动 worker（不写 PID；后台 worker 已在跑时拒绝）
+  run-beat         前台启动 beat
+  run-flower       前台启动 Flower
   stop             停止 worker/beat/flower 进程组
   restart          stop 后按需重新启动
   status           显示各组件 PID 与进程状态
@@ -401,6 +407,106 @@ cmd_start_flower() {
   echo "已写入 PID ${pid} -> ${PID_FLOWER}"
 }
 
+cmd_run() {
+  local choice="${1:-}"
+  if [[ -z "$choice" ]]; then
+    local pick
+    pick="$(gum choose --header "前台运行（不写 PID；后台已在跑时拒绝）" \
+      "1 all（不可用：请多终端分别 run-worker / run-beat / run-flower）" \
+      "2 worker" \
+      "3 beat" \
+      "4 flower" \
+      "0 取消")" || return 0
+    [[ -z "$pick" ]] && return 0
+    choice="${pick%% *}"
+  fi
+  case "${choice:-0}" in
+    1)
+      echo "错误: 无法在单终端前台同时运行 worker、beat、flower。请分别执行:" >&2
+      echo "  $0 run-worker" >&2
+      echo "  $0 run-beat" >&2
+      echo "  $0 run-flower" >&2
+      exit 1
+      ;;
+    2) cmd_run_worker ;;
+    3) cmd_run_beat ;;
+    4) cmd_run_flower ;;
+    0|"") echo "已取消。" ;;
+    *)
+      echo "无效选择，请输入 1-4 或 0。" >&2
+      return 1
+      ;;
+  esac
+}
+
+cmd_run_worker() {
+  require_venv_celery
+  ensure_dirs
+  activate_venv
+  ensure_scaffold
+  if ! check_redis; then
+    echo "警告: 无法连接 Redis，worker 可能无法正常启动。请先启动 Redis 或检查 CELERY_BROKER_URL。" >&2
+    if [[ "${NONINTERACTIVE:-}" != "1" ]] && [[ -t 0 ]]; then
+      gum confirm "仍尝试启动 worker？" || return 0
+    fi
+  fi
+  local existing
+  existing="$(read_pid "$PID_WORKER")"
+  if [[ -n "$existing" ]] && process_alive "$existing"; then
+    echo "Worker 已在后台运行（PID ${existing}）。请先 $0 stop，再使用 run-worker。" >&2
+    exit 1
+  fi
+  activate_venv
+  echo "==> 前台 Celery worker（Ctrl+C 退出；不写 PID）…"
+  echo "    CELERY_BROKER_URL=${CELERY_BROKER_URL}"
+  if [[ "${CELERY_APP}" == "celery_app:app" ]] && [[ -f "${CELERY_ETC_DIR}/celery_app.py" ]]; then
+    cd "$CELERY_ETC_DIR" && exec celery -A celery_app:app worker --loglevel=info
+  fi
+  exec celery -A "$CELERY_APP" worker --loglevel=info
+}
+
+cmd_run_beat() {
+  require_venv_celery
+  ensure_dirs
+  activate_venv
+  ensure_scaffold
+  local existing
+  existing="$(read_pid "$PID_BEAT")"
+  if [[ -n "$existing" ]] && process_alive "$existing"; then
+    echo "Beat 已在后台运行（PID ${existing}）。请先 $0 stop，再使用 run-beat。" >&2
+    exit 1
+  fi
+  activate_venv
+  echo "==> 前台 Celery beat（Ctrl+C 退出；不写 PID）…"
+  if [[ "${CELERY_APP}" == "celery_app:app" ]] && [[ -f "${CELERY_ETC_DIR}/celery_app.py" ]]; then
+    cd "$CELERY_ETC_DIR" && exec celery -A celery_app:app beat --loglevel=info
+  fi
+  exec celery -A "$CELERY_APP" beat --loglevel=info
+}
+
+cmd_run_flower() {
+  require_venv_celery
+  if ! "${CELERY_VENV}/bin/python" -c "import flower" 2>/dev/null; then
+    echo "未安装 flower，请先运行: $0 install" >&2
+    exit 1
+  fi
+  ensure_dirs
+  activate_venv
+  ensure_scaffold
+  local existing
+  existing="$(read_pid "$PID_FLOWER")"
+  if [[ -n "$existing" ]] && process_alive "$existing"; then
+    echo "Flower 已在后台运行（PID ${existing}）。请先 $0 stop，再使用 run-flower。" >&2
+    exit 1
+  fi
+  activate_venv
+  echo "==> 前台 Flower（http://${FLOWER_ADDRESS}:${FLOWER_PORT}；Ctrl+C 退出；不写 PID）…"
+  if [[ "${CELERY_APP}" == "celery_app:app" ]] && [[ -f "${CELERY_ETC_DIR}/celery_app.py" ]]; then
+    cd "$CELERY_ETC_DIR" && exec celery -A celery_app:app flower --port="${FLOWER_PORT}" --address="${FLOWER_ADDRESS}"
+  fi
+  exec celery -A "$CELERY_APP" flower --port="${FLOWER_PORT}" --address="${FLOWER_ADDRESS}"
+}
+
 cmd_stop() {
   echo "==> 停止 Celery 进程..."
   stop_by_pid_file "$PID_WORKER" "worker"
@@ -504,6 +610,10 @@ dispatch() {
     start-worker) cmd_start_worker ;;
     start-beat) cmd_start_beat ;;
     start-flower) cmd_start_flower ;;
+    run) cmd_run "$@" ;;
+    run-worker) cmd_run_worker ;;
+    run-beat) cmd_run_beat ;;
+    run-flower) cmd_run_flower ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
     status) cmd_status ;;
@@ -525,8 +635,9 @@ interactive_main() {
   while true; do
     local pick
     pick="$(gum choose --header "选择操作（取消退出）" \
-      "install" "update" "start" "stop" "restart" "status" \
+      "install" "update" "start" "run" "stop" "restart" "status" \
       "start-worker" "start-beat" "start-flower" \
+      "run-worker" "run-beat" "run-flower" \
       "help" "quit")" || break
     [[ -z "$pick" ]] && break
     case "$pick" in

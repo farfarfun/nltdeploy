@@ -8,6 +8,7 @@
 #   ./setup.sh install      # 下载二进制到 ${NEW_API_SERVICE_HOME}/bin/new-api
 #   ./setup.sh update       # 重新下载（同 install）
 #   ./setup.sh start        # 后台启动（工作目录为数据目录，默认端口 8801）
+#   ./setup.sh run          # 前台启动（同目录与 PORT；不写 PID；后台已在跑时拒绝）
 #   ./setup.sh stop | restart | status | uninstall
 #
 # 环境变量：
@@ -65,6 +66,7 @@ usage() {
 命令:
   install / update   从 GitHub Releases 下载预编译二进制到 ${NEW_API_BIN}
   start              后台启动（cwd ${NEW_API_DATA_DIR}，PORT=${NEW_API_PORT}，日志 ${LOG_FILE}）
+  run                前台启动（与 start 相同 cwd 与 PORT；终端附着；不写 PID；后台已在跑时拒绝）
   stop / restart / status
   uninstall          停止并删除 ${NEW_API_SERVICE_HOME}
 
@@ -253,6 +255,20 @@ cmd_start() {
   fi
 }
 
+cmd_run() {
+  [[ -x "${NEW_API_BIN}" ]] || die "未安装，请先: $0 install"
+  ensure_dirs
+  local existing
+  existing="$(read_pid)"
+  if [[ -n "$existing" ]] && process_alive "$existing"; then
+    echo "new-api 已在后台运行（PID ${existing}）。请先 $0 stop，再使用 run。" >&2
+    exit 1
+  fi
+  echo "==> 前台启动 new-api，PORT=${NEW_API_PORT}，cwd ${NEW_API_DATA_DIR}（Ctrl+C 退出；不写 PID）" >&2
+  pushd "${NEW_API_DATA_DIR}" >/dev/null
+  exec env PORT="${NEW_API_PORT}" "${NEW_API_BIN}"
+}
+
 cmd_stop() {
   local pid
   pid="$(read_pid)"
@@ -331,6 +347,7 @@ dispatch() {
     install) cmd_install ;;
     update) cmd_update ;;
     start) cmd_start ;;
+    run) cmd_run ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
     status) cmd_status ;;
@@ -353,7 +370,7 @@ interactive_main() {
   while true; do
     local pick
     pick="$(gum choose --header "选择操作" \
-      "install" "update" "start" "stop" "restart" "status" "uninstall" "help" "quit")" || break
+      "install" "update" "start" "run" "stop" "restart" "status" "uninstall" "help" "quit")" || break
     [[ -z "$pick" ]] && break
     case "$pick" in
       quit) break ;;

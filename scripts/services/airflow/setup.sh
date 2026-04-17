@@ -11,6 +11,7 @@
 #   ./airflow-setup.sh              # 无参数：gum 菜单
 #   ./airflow-setup.sh install
 #   ./airflow-setup.sh start
+#   ./airflow-setup.sh run              # 前台 standalone（同 start 的环境变量；不写 PID；后台已在跑时拒绝）
 #   ./airflow-setup.sh status
 #   ./airflow-setup.sh dag-scaffold
 #   ./airflow-setup.sh dags-list
@@ -101,6 +102,7 @@ usage() {
   install          在 ~/opt/airflow/venv 用 uv 创建/复用环境；按官方 constraints 安装 Airflow 核心 + FAB；db migrate + fab-db migrate
   update           保留 AIRFLOW_HOME 数据，按当前 AIRFLOW_VERSION 与 constraints 升级依赖并执行 db / fab-db migrate
   start            后台启动 airflow standalone（写入 run/standalone.pid）
+  run              前台启动 airflow standalone（同 start 的 venv 与环境变量；不写 PID；后台已在跑时拒绝）
   stop             停止 standalone 进程组
   restart          stop 后 start
   status           显示 PID 与进程状态；尝试 airflow jobs check
@@ -361,6 +363,31 @@ cmd_start() {
   echo "$pid" >"$PID_FILE"
   echo "已写入 PID ${pid} -> ${PID_FILE}"
   echo "UI 默认 http://localhost:${AIRFLOW__WEBSERVER__WEB_SERVER_PORT} （见 airflow.cfg）；standalone 首次运行可能在日志中打印管理员账号。"
+}
+
+cmd_run() {
+  require_venv_airflow
+  ensure_dirs
+  local existing
+  existing="$(read_pid)"
+  if [[ -n "$existing" ]] && process_alive "$existing"; then
+    echo "standalone 已在后台运行（PID ${existing}）。请先 $0 stop，再使用 run。" >&2
+    exit 1
+  fi
+  activate_venv
+  local airflow_cmd="${AIRFLOW_VENV}/bin/airflow"
+  if [[ ! -x "$airflow_cmd" ]]; then
+    echo "未找到可执行文件: ${airflow_cmd}" >&2
+    exit 1
+  fi
+  export AIRFLOW__CORE__LOAD_EXAMPLES="${AIRFLOW__CORE__LOAD_EXAMPLES:-False}"
+  export AIRFLOW__CORE__PARALLELISM="${AIRFLOW__CORE__PARALLELISM:-4}"
+  export AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG="${AIRFLOW__CORE__MAX_ACTIVE_TASKS_PER_DAG:-4}"
+  export AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG="${AIRFLOW__CORE__MAX_ACTIVE_RUNS_PER_DAG:-2}"
+  export AIRFLOW__API__WORKERS="${AIRFLOW__API__WORKERS:-2}"
+  export AIRFLOW__WEBSERVER__WEB_SERVER_PORT="${AIRFLOW__WEBSERVER__WEB_SERVER_PORT:-$DEFAULT_AIRFLOW_PORT}"
+  say_info "==> 前台启动 airflow standalone（Ctrl+C 退出；不写 PID）…"
+  exec "${airflow_cmd}" standalone
 }
 
 # 第二个参数为 1 时跳过确认（供 uninstall 在已二次确认后调用）
@@ -690,6 +717,7 @@ dispatch() {
     install) cmd_install ;;
     update) cmd_update ;;
     start) cmd_start ;;
+    run) cmd_run ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
     status) cmd_status ;;
@@ -718,7 +746,7 @@ interactive_main() {
   while true; do
     local pick
     pick="$(gum choose --header "Airflow 本地 — 选择操作（取消退出）" \
-      "install" "update" "start" "stop" "restart" "status" \
+      "install" "update" "start" "run" "stop" "restart" "status" \
       "dag-scaffold" "dags-list" "trigger" "task-test" \
       "users-create" "users-list" "users-reset-password" "http-trigger" \
       "uninstall" "help" "quit")" || break

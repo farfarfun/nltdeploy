@@ -6,15 +6,15 @@
 
 - **pip-sources**：测速并写入 pip 配置，保留已有认证源等。
 - **python-env**：用 [uv](https://github.com/astral-sh/uv) 建虚拟环境并安装常用基础包。
-- **airflow**：本机 **Apache Airflow 3.x**（安装、启停、DAG 脚手架、用户与 HTTP 触发等）；依赖 gum，脚本内会按 README 同款方式拉取安装。
-- **celery**：Celery 安装与 worker/beat/flower 启停、状态；默认 `~/opt/celery`。
+- **airflow**：本机 **Apache Airflow 3.x**（安装、启停、DAG 脚手架、用户与 HTTP 触发等）；依赖 gum，脚本内会按 README 同款方式拉取安装。另提供 **`run`**：与 `start` 同环境的前台 `standalone`（不写 PID；后台已在跑时拒绝）。
+- **celery**：Celery 安装与 worker/beat/flower 启停、状态；默认 `~/opt/celery`。另提供 **`run` / `run-worker` / `run-beat` / `run-flower`**（前台、不写 PID；`run` 选 all 会拒绝，需多终端分别跑各 `run-*`）。
 - **utils**：安装 **gum**（`~/opt/gum`）与可选 shell 别名（`ll` / `la` / `lla`）。
 - **github-net**：诊断并修复「网页能开但 `git clone` 失败」的常见 HTTPS/SSH 问题。
 - **download**（`nlt-download`）：可选的 GitHub 族 `https` 下载 URL 改写后再 `curl`（环境变量驱动，默认不改写）；见 `scripts/tools/download/README.md`。
 - **download**：`nlt-download` — 对 GitHub 族 HTTPS 下载 URL 做可选镜像/前缀改写后调用 `curl`；仓库内 **new-api / code-server / gum 安装路径** 等已统一经 `_nlt_github_download_curl` / `nlt-github-download.sh` 调用（见 `scripts/tools/download/README.md`）。
-- **paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，**默认工作区** **`~/opt/paperclip/workspace`**（环境变量 **`PAPERCLIP_WORKSPACE`**，可改）。`start` 会在实例就绪后尽量把上游 **`~/.paperclip/instances/<id>/workspaces`** 符号链接到该目录（若该 `workspaces` 已非空则跳过）。数据目录另见上游 `~/.paperclip/…`。无实例配置时 **`start` 会先非交互执行 `onboard --yes`**（依赖 `script(1)`）；也可手动 **`nlt-paperclip onboard`**（或 `NONINTERACTIVE=1 nlt-paperclip onboard`）。
-- **code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。
-- **new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 8801**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。
+- **paperclip**：从 **GitHub 克隆** [paperclipai/paperclip](https://github.com/paperclipai/paperclip) 源码、`pnpm install`，并以 **`pnpm paperclipai run`** 启停；默认安装根 `~/opt/paperclip`，**默认工作区** **`~/opt/paperclip/workspace`**（环境变量 **`PAPERCLIP_WORKSPACE`**，可改）。`start` 会在实例就绪后尽量把上游 **`~/.paperclip/instances/<id>/workspaces`** 符号链接到该目录（若该 `workspaces` 已非空则跳过）。数据目录另见上游 `~/.paperclip/…`。无实例配置时 **`start` 会先非交互执行 `onboard --yes`**（依赖 `script(1)`）；也可手动 **`nlt-paperclip onboard`**（或 `NONINTERACTIVE=1 nlt-paperclip onboard`）。**`run`** 为同准备下的前台附着（不写 PID；后台已在跑时拒绝）。
+- **code-server**：从 **GitHub Releases** 下载官方 **standalone** 压缩包并解压到 `~/opt/code-server`；`nohup` 后台运行，默认绑定 `127.0.0.1:8080`；无需本机 Node.js。**`run`** 为前台附着（`PASSWORD` 与 `start` 一致；不写 PID；后台已在跑时拒绝）。
+- **new-api**：从 **GitHub Releases** 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) 的预编译二进制到 `~/opt/new-api/bin`；数据目录默认 `~/opt/new-api/data`（SQLite 等），默认 **HTTP 端口 8801**；解析版本时会跳过无附件的 nightly，fallback `v0.12.6`。**`run`** 为前台 `PORT` 启动（不写 PID；后台已在跑时拒绝）。
 - **services**（`nlt-services.sh`）：**`nlt-services`** 总入口——**`status`** 汇总各常驻服务 PID/端口/HTTP 探测；**`install`** 先选 **安装 / 卸载** 再选模块（或 `install add|remove <模块>`）；卸载不含 celery、utils（上游无 uninstall）。
 
 仓库内脚本按 **`scripts/tools/`**（工具 / 环境）与 **`scripts/services/`**（常驻服务 + 聚合入口）分层存放，详见下文「目录结构」。
@@ -96,17 +96,17 @@ bash tests/progress_smoke.sh
 |-------------|---------------------|
 | `nlt-pip-sources` | `scripts/tools/pip-sources/setup.sh`（无参时 gum 选 install/update/reinstall/uninstall） |
 | `nlt-python-env` | `scripts/tools/python-env/setup.sh`（无参时 gum 选子命令；见脚本头） |
-| `nlt-airflow` | `scripts/services/airflow/setup.sh` 全量子命令；`install` 首次/升级安装；`start` / `stop` / `status` / `update` 等；无参为 gum 菜单 |
-| `nlt-celery` | `scripts/services/celery/setup.sh` 全量子命令；`install` / `update`；`start-worker` / `stop` / `status` 等；无参为菜单 |
+| `nlt-airflow` | `scripts/services/airflow/setup.sh` 全量子命令；`install` 首次/升级安装；`start` / `run`（前台）/ `stop` / `status` / `update` 等；无参为 gum 菜单 |
+| `nlt-celery` | `scripts/services/celery/setup.sh` 全量子命令；`install` / `update`；`start` / `run` / `run-worker` 等；无参为菜单 |
 | `nlt-utils`（可接子参数，如 `gum`、`all`） | `scripts/tools/utils/setup.sh` … |
 | `nlt-github-net` | `scripts/tools/github-net/setup.sh`（无参 gum；可 `install` / `update` / `reinstall` / `uninstall`） |
 | `nlt-download` | `scripts/tools/download/setup.sh`（`curl` / `resolve-url`；与 `scripts/lib/nlt-github-download.sh` 同源；无参 gum） |
 | `nlt-port-kill` | `scripts/tools/port-kill/setup.sh`（`kill` / `list`；可 `source … --lib` 调用 `nlt_kill_port`；无参 gum；`NONINTERACTIVE=1` 跳过确认） |
 | `nlt-download` | `scripts/tools/download/setup.sh`（`curl` / `resolve-url`；可选 GitHub URL 镜像；无参 gum；`NONINTERACTIVE=1` + `install` 跑自测） |
 | `nlt-services` | `scripts/services/nlt-services.sh`（无参 gum；`status`；`install` 先选安装或卸载；非交互：`install add <模块>` / `install remove <模块>`；`status --no-http`） |
-| `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install` / `onboard` / `start` 等；无参为 gum 菜单 |
-| `nlt-code-server` | `scripts/services/code-server/setup.sh` 全量子命令；`install`（下载解压官方包）等；无参为 gum 菜单 |
-| `nlt-new-api` | `scripts/services/new-api/setup.sh` 全量子命令；`install` / `update` 下载 Release 二进制；无参为 gum 菜单 |
+| `nlt-paperclip` | `scripts/services/paperclip/setup.sh` 全量子命令；`install` / `onboard` / `start` / `run` 等；无参为 gum 菜单 |
+| `nlt-code-server` | `scripts/services/code-server/setup.sh` 全量子命令；`install`（下载解压官方包）、`start` / `run` 等；无参为 gum 菜单 |
+| `nlt-new-api` | `scripts/services/new-api/setup.sh` 全量子命令；`install` / `update` 下载 Release 二进制；`start` / `run` 等；无参为 gum 菜单 |
 
 ## 目录结构
 
@@ -233,7 +233,7 @@ curl -LsSf https://raw.githubusercontent.com/farfarfun/nltdeploy/HEAD/scripts/se
 curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/services/airflow/setup.sh | bash
 ```
 
-默认约定：`AIRFLOW_HOME=~/opt/airflow`，Web 端口等与脚本内 `DEFAULT_*` 一致；更多环境变量与 `http-trigger` 说明见 **`scripts/services/airflow/setup.sh` 文件头注释**。
+默认约定：`AIRFLOW_HOME=~/opt/airflow`，Web 端口等与脚本内 `DEFAULT_*` 一致；更多环境变量与 `http-trigger` 说明见 **`scripts/services/airflow/setup.sh` 文件头注释**。排错可用 **`./setup.sh run`**：与 `start` 相同 venv 与环境变量下的前台 `airflow standalone`（不写 PID；若后台 `start` 已在跑则会拒绝）。
 
 ### 5. Celery（本机）
 
@@ -243,7 +243,7 @@ chmod +x setup.sh
 ./setup.sh
 ```
 
-默认 `CELERY_HOME=~/opt/celery`，Broker 等可通过环境变量覆盖，详见脚本头部。
+默认 `CELERY_HOME=~/opt/celery`，Broker 等可通过环境变量覆盖，详见脚本头部。前台调试使用 **`run-worker` / `run-beat` / `run-flower`** 或交互 **`run`**（勿在单终端用 `run` 选 all；脚本会拒绝并提示分终端执行）。
 
 ### 6. 修复 GitHub 克隆网络
 
@@ -271,11 +271,11 @@ curl -LsSf https://gitee.com/farfarfun/nltdeploy/raw/master/scripts/tools/github
 | `tools/python-env` | `setup.sh` | uv、多版本 Python venv、基础包 |
 | `tools/utils` | `setup.sh` | gum 与 shell 便利项 |
 | `tools/github-net` | `setup.sh` | GitHub 克隆通道诊断与修复 |
-| `services/airflow` | `setup.sh` | Airflow 3 安装与日常运维封装 |
-| `services/celery` | `setup.sh` | Celery 安装与进程管理 |
-| `services/paperclip` | `setup.sh` | 克隆 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)、pnpm 安装与启停 |
-| `services/code-server` | `setup.sh` | 下载 [coder/code-server](https://github.com/coder/code-server) standalone 包并启停 |
-| `services/new-api` | `setup.sh` | 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) Release 二进制并启停 |
+| `services/airflow` | `setup.sh` | Airflow 3 安装与日常运维封装（含前台 `run`） |
+| `services/celery` | `setup.sh` | Celery 安装与进程管理（含前台 `run` / `run-*`） |
+| `services/paperclip` | `setup.sh` | 克隆 [paperclipai/paperclip](https://github.com/paperclipai/paperclip)、pnpm 安装与启停（含 `run`） |
+| `services/code-server` | `setup.sh` | 下载 [coder/code-server](https://github.com/coder/code-server) standalone 包并启停（含 `run`） |
+| `services/new-api` | `setup.sh` | 下载 [QuantumNous/new-api](https://github.com/QuantumNous/new-api) Release 二进制并启停（含 `run`） |
 | `services/`（根） | `nlt-services.sh` | **`nlt-services`**：`status`；`install` 安装/卸载分流与各 `nlt-*` 对接 |
 
 子目录中的详细说明：

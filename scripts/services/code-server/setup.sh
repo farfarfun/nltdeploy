@@ -8,6 +8,7 @@
 #   ./setup.sh install      # 下载并解压到 ${CODE_SERVER_SERVICE_HOME}
 #   ./setup.sh update       # 重新下载安装（同 install）
 #   ./setup.sh start        # 后台 code-server --bind-addr …
+#   ./setup.sh run          # 前台附着（PASSWORD 与 start 一致；不写 PID；后台已在跑时拒绝）
 #   ./setup.sh stop | restart | status | uninstall
 #
 # 环境变量：
@@ -60,6 +61,7 @@ usage() {
 命令:
   install / update   从 GitHub Releases 下载 standalone 包并解压到 ${CODE_SERVER_SERVICE_HOME}
   start              后台启动（日志 ${LOG_FILE}，默认绑定 ${CODE_SERVER_BIND}）
+  run                前台启动（同绑定与 PASSWORD 规则；不写 PID；后台已在跑时拒绝）
   stop / restart / status
   uninstall          停止并删除 ${CODE_SERVER_SERVICE_HOME}（配置目录 ~/.config/code-server 需自行处理）
 
@@ -195,6 +197,23 @@ cmd_start() {
   fi
 }
 
+cmd_run() {
+  [[ -x "${CODE_SERVER_BIN}" ]] || die "未安装，请先: $0 install"
+  ensure_dirs
+  local existing
+  existing="$(read_pid)"
+  if [[ -n "$existing" ]] && process_alive "$existing"; then
+    echo "code-server 已在后台运行（PID ${existing}）。请先 $0 stop，再使用 run。" >&2
+    exit 1
+  fi
+  echo "==> 前台启动 code-server，绑定 ${CODE_SERVER_BIND}（Ctrl+C 退出；不写 PID）" >&2
+  pushd "${HOME}" >/dev/null
+  if [[ -n "${PASSWORD:-}" ]]; then
+    exec env PASSWORD="${PASSWORD}" "${CODE_SERVER_BIN}" --bind-addr "${CODE_SERVER_BIND}"
+  fi
+  exec "${CODE_SERVER_BIN}" --bind-addr "${CODE_SERVER_BIND}"
+}
+
 cmd_stop() {
   local pid
   pid="$(read_pid)"
@@ -272,6 +291,7 @@ dispatch() {
     install) cmd_install ;;
     update) cmd_update ;;
     start) cmd_start ;;
+    run) cmd_run ;;
     stop) cmd_stop ;;
     restart) cmd_restart ;;
     status) cmd_status ;;
@@ -294,7 +314,7 @@ interactive_main() {
   while true; do
     local pick
     pick="$(gum choose --header "选择操作" \
-      "install" "update" "start" "stop" "restart" "status" "uninstall" "help" "quit")" || break
+      "install" "update" "start" "run" "stop" "restart" "status" "uninstall" "help" "quit")" || break
     [[ -z "$pick" ]] && break
     case "$pick" in
       quit) break ;;
