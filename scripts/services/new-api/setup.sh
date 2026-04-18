@@ -257,23 +257,31 @@ cmd_start() {
     exit 1
   fi
   rm -f "$PID_FILE"
-  echo "==> 启动 new-api，cwd ${NEW_API_DATA_DIR}，日志 ${LOG_FILE}" >&2
+  echo "==> 启动 new-api，必须先 cd 到数据目录再启动（否则 godotenv 找不到 .env）；日志 ${LOG_FILE}" >&2
   if [[ -f "${NEW_API_DATA_DIR}/.env" ]] && [[ "${NEW_API_FORCE_SCRIPT_PORT:-}" != "1" ]]; then
     echo "    检测到 .env：不注入 PORT，由程序加载 ${NEW_API_DATA_DIR}/.env（需覆盖请设 NEW_API_FORCE_SCRIPT_PORT=1）" >&2
   else
     echo "    PORT=${NEW_API_PORT}（注入进程环境）" >&2
   fi
-  pushd "${NEW_API_DATA_DIR}" >/dev/null
-  # 上游 main：先 godotenv.Load(".env")，且默认不覆盖已存在环境变量；故存在 .env 时不预先 export PORT
-  if [[ -f "${NEW_API_DATA_DIR}/.env" ]] && [[ "${NEW_API_FORCE_SCRIPT_PORT:-}" != "1" ]]; then
-    # 清掉继承的 PORT，避免 shell 已 export 的 PORT 阻止 godotenv 写入
-    nohup env -u PORT "${NEW_API_BIN}" >>"${LOG_FILE}" 2>&1 &
-  else
-    nohup env PORT="${NEW_API_PORT}" "${NEW_API_BIN}" >>"${LOG_FILE}" 2>&1 &
-  fi
-  local cpid=$!
+  # 必须在子 shell 内先 cd 再 nohup：进程 cwd 才是 ${NEW_API_DATA_DIR}，与上游 godotenv.Load(\".env\") 一致
+  local cpid
+  cpid="$(
+    cd "${NEW_API_DATA_DIR}" || {
+      echo "错误: 无法 cd 到 ${NEW_API_DATA_DIR}" >&2
+      exit 1
+    }
+    echo "    [启动] 工作目录: $(pwd -P)" >&2
+    # 上游 main：先 godotenv.Load(".env")，且默认不覆盖已存在环境变量；故存在 .env 时不预先 export PORT
+    if [[ -f "${NEW_API_DATA_DIR}/.env" ]] && [[ "${NEW_API_FORCE_SCRIPT_PORT:-}" != "1" ]]; then
+      echo "    [启动] 将执行: cd $(printf '%q' "${NEW_API_DATA_DIR}") && nohup env -u PORT $(printf '%q' "${NEW_API_BIN}") >>$(printf '%q' "${LOG_FILE}") 2>&1 &" >&2
+      nohup env -u PORT "${NEW_API_BIN}" >>"${LOG_FILE}" 2>&1 &
+    else
+      echo "    [启动] 将执行: cd $(printf '%q' "${NEW_API_DATA_DIR}") && nohup env PORT=$(printf '%q' "${NEW_API_PORT}") $(printf '%q' "${NEW_API_BIN}") >>$(printf '%q' "${LOG_FILE}") 2>&1 &" >&2
+      nohup env PORT="${NEW_API_PORT}" "${NEW_API_BIN}" >>"${LOG_FILE}" 2>&1 &
+    fi
+    echo $!
+  )" || die "启动失败"
   echo "$cpid" >"$PID_FILE"
-  popd >/dev/null
   sleep 1
   existing="$(read_pid)"
   if [[ -n "$existing" ]] && process_alive "$existing"; then
@@ -293,12 +301,16 @@ cmd_run() {
     exit 1
   fi
   if [[ -f "${NEW_API_DATA_DIR}/.env" ]] && [[ "${NEW_API_FORCE_SCRIPT_PORT:-}" != "1" ]]; then
-    echo "==> 前台启动 new-api，cwd ${NEW_API_DATA_DIR}（使用 .env；Ctrl+C 退出；不写 PID）" >&2
-    pushd "${NEW_API_DATA_DIR}" >/dev/null
+    echo "==> 前台启动 new-api（先 cd 数据目录再 exec，否则 .env 不加载）；Ctrl+C 退出；不写 PID" >&2
+    cd "${NEW_API_DATA_DIR}" || die "无法 cd 到 ${NEW_API_DATA_DIR}"
+    echo "    [前台] 工作目录: $(pwd -P)" >&2
+    echo "    [前台] 将执行: exec env -u PORT $(printf '%q' "${NEW_API_BIN}")" >&2
     exec env -u PORT "${NEW_API_BIN}"
   else
-    echo "==> 前台启动 new-api，PORT=${NEW_API_PORT}，cwd ${NEW_API_DATA_DIR}（Ctrl+C 退出；不写 PID）" >&2
-    pushd "${NEW_API_DATA_DIR}" >/dev/null
+    echo "==> 前台启动 new-api，PORT=${NEW_API_PORT}（先 cd 数据目录再 exec）；Ctrl+C 退出；不写 PID" >&2
+    cd "${NEW_API_DATA_DIR}" || die "无法 cd 到 ${NEW_API_DATA_DIR}"
+    echo "    [前台] 工作目录: $(pwd -P)" >&2
+    echo "    [前台] 将执行: exec env PORT=$(printf '%q' "${NEW_API_PORT}") $(printf '%q' "${NEW_API_BIN}")" >&2
     exec env PORT="${NEW_API_PORT}" "${NEW_API_BIN}"
   fi
 }
