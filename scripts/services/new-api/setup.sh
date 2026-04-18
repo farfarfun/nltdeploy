@@ -13,9 +13,12 @@
 #
 # 环境变量：
 #   NEW_API_SERVICE_HOME   安装根（默认 ~/opt/new-api），内含 bin/new-api、data/（SQLite 等工作目录）
-#   NEW_API_DATA_DIR       运行时的 cwd（默认 ${NEW_API_SERVICE_HOME}/data），库文件等写在此目录；.env 放此目录
+#   NEW_API_DATA_DIR       运行时的 cwd（默认 ${NEW_API_SERVICE_HOME}/data）；库文件、以及 new-api 官方文档中的 .env 均放此目录。
+#                          二进制启动后会在该目录下执行 godotenv.Load(".env")，把 new-api 内部需要的变量（如 SQL_DSN、
+#                          SESSION_SECRET、REDIS_CONN_STRING、各类业务开关等）写在 ${NEW_API_DATA_DIR}/.env 即可。
 #   NEW_API_PORT / PORT    无 .env 时：启动前注入 PORT（默认 8801）。若存在 ${NEW_API_DATA_DIR}/.env，默认不注入
-#                          PORT，由程序内 godotenv 从 .env 读取（避免 shell 已设变量覆盖 .env）。
+#                          PORT，由程序从 .env 读入；且启动时用 env -u PORT 去掉 shell 里已 export 的 PORT，避免挡住 .env。
+#                          注意：其它键若你已在当前 shell 里 export 过同名变量，godotenv 同样不会覆盖——需 unset 该变量或换干净终端。
 #   NEW_API_FORCE_SCRIPT_PORT=1  即使存在 .env 也强制使用 NEW_API_PORT（等价于以前行为）
 #   NEW_API_VERSION        强制版本，如 0.12.6 或 v0.12.6（不设则从 Releases 解析）
 #   NEW_API_GITHUB_REPO    owner/repo（默认 QuantumNous/new-api）
