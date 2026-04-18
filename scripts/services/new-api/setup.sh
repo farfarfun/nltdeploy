@@ -13,8 +13,10 @@
 #
 # 环境变量：
 #   NEW_API_SERVICE_HOME   安装根（默认 ~/opt/new-api），内含 bin/new-api、data/（SQLite 等工作目录）
-#   NEW_API_DATA_DIR       运行时的 cwd（默认 ${NEW_API_SERVICE_HOME}/data），库文件等写在此目录
-#   NEW_API_PORT / PORT    监听端口（启动时 export PORT；默认 8801，可覆盖）
+#   NEW_API_DATA_DIR       运行时的 cwd（默认 ${NEW_API_SERVICE_HOME}/data），库文件等写在此目录；.env 放此目录
+#   NEW_API_PORT / PORT    无 .env 时：启动前注入 PORT（默认 8801）。若存在 ${NEW_API_DATA_DIR}/.env，默认不注入
+#                          PORT，由程序内 godotenv 从 .env 读取（避免 shell 已设变量覆盖 .env）。
+#   NEW_API_FORCE_SCRIPT_PORT=1  即使存在 .env 也强制使用 NEW_API_PORT（等价于以前行为）
 #   NEW_API_VERSION        强制版本，如 0.12.6 或 v0.12.6（不设则从 Releases 解析）
 #   NEW_API_GITHUB_REPO    owner/repo（默认 QuantumNous/new-api）
 #   NONINTERACTIVE=1
@@ -65,8 +67,8 @@ usage() {
 
 命令:
   install / update   从 GitHub Releases 下载预编译二进制到 ${NEW_API_BIN}
-  start              后台启动（cwd ${NEW_API_DATA_DIR}，PORT=${NEW_API_PORT}，日志 ${LOG_FILE}）
-  run                前台启动（与 start 相同 cwd 与 PORT；终端附着；不写 PID；后台已在跑时拒绝）
+  start              后台启动（cwd ${NEW_API_DATA_DIR}；无 .env 时注入 PORT=${NEW_API_PORT}；有 .env 时由程序读 .env；日志 ${LOG_FILE}）
+  run                前台启动（与 start 相同 cwd；终端附着；不写 PID；后台已在跑时拒绝）
   stop / restart / status
   uninstall          停止并删除 ${NEW_API_SERVICE_HOME}
 
@@ -80,6 +82,19 @@ ensure_dirs() {
 }
 
 die() { echo "错误: $*" >&2; exit 1; }
+
+# new-api 使用 godotenv.Load(".env")：默认不覆盖已在环境中的变量。本脚本若先 env PORT=… 会导致 .env 不生效。
+# 返回用于探测 HTTP 的端口（优先 .env 中 PORT，否则 NEW_API_PORT）。
+_new_api_effective_port() {
+  local p="${NEW_API_PORT}"
+  if [[ -f "${NEW_API_DATA_DIR}/.env" ]]; then
+    local raw
+    raw="$(grep -E '^[[:space:]]*PORT[[:space:]]*=' "${NEW_API_DATA_DIR}/.env" 2>/dev/null | tail -1 || true)"
+    raw="$(printf '%s' "$raw" | sed -E 's/^[[:space:]]*PORT[[:space:]]*=[[:space:]]*//;s/#.*$//;s/^["'\'']//;s/["'\'']$//;s/[[:space:]]*$//')"
+    [[ -n "$raw" ]] && p="$raw"
+  fi
+  printf '%s' "$p"
+}
 
 process_alive() {
   kill -0 "$1" 2>/dev/null
@@ -239,17 +254,27 @@ cmd_start() {
     exit 1
   fi
   rm -f "$PID_FILE"
-  echo "==> 启动 new-api，PORT=${NEW_API_PORT}，cwd ${NEW_API_DATA_DIR}，日志 ${LOG_FILE}" >&2
+  echo "==> 启动 new-api，cwd ${NEW_API_DATA_DIR}，日志 ${LOG_FILE}" >&2
+  if [[ -f "${NEW_API_DATA_DIR}/.env" ]] && [[ "${NEW_API_FORCE_SCRIPT_PORT:-}" != "1" ]]; then
+    echo "    检测到 .env：不注入 PORT，由程序加载 ${NEW_API_DATA_DIR}/.env（需覆盖请设 NEW_API_FORCE_SCRIPT_PORT=1）" >&2
+  else
+    echo "    PORT=${NEW_API_PORT}（注入进程环境）" >&2
+  fi
   pushd "${NEW_API_DATA_DIR}" >/dev/null
-  # 上游 main 优先读环境变量 PORT
-  nohup env PORT="${NEW_API_PORT}" "${NEW_API_BIN}" >>"${LOG_FILE}" 2>&1 &
+  # 上游 main：先 godotenv.Load(".env")，且默认不覆盖已存在环境变量；故存在 .env 时不预先 export PORT
+  if [[ -f "${NEW_API_DATA_DIR}/.env" ]] && [[ "${NEW_API_FORCE_SCRIPT_PORT:-}" != "1" ]]; then
+    # 清掉继承的 PORT，避免 shell 已 export 的 PORT 阻止 godotenv 写入
+    nohup env -u PORT "${NEW_API_BIN}" >>"${LOG_FILE}" 2>&1 &
+  else
+    nohup env PORT="${NEW_API_PORT}" "${NEW_API_BIN}" >>"${LOG_FILE}" 2>&1 &
+  fi
   local cpid=$!
   echo "$cpid" >"$PID_FILE"
   popd >/dev/null
   sleep 1
   existing="$(read_pid)"
   if [[ -n "$existing" ]] && process_alive "$existing"; then
-    echo "已启动 PID ${existing}（默认 http://127.0.0.1:${NEW_API_PORT}/ ）"
+    echo "已启动 PID ${existing}（探测 http://127.0.0.1:$(_new_api_effective_port)/ ）"
   else
     echo "警告: 进程可能已退出，请查看: tail -80 ${LOG_FILE}" >&2
   fi
@@ -264,9 +289,15 @@ cmd_run() {
     echo "new-api 已在后台运行（PID ${existing}）。请先 $0 stop，再使用 run。" >&2
     exit 1
   fi
-  echo "==> 前台启动 new-api，PORT=${NEW_API_PORT}，cwd ${NEW_API_DATA_DIR}（Ctrl+C 退出；不写 PID）" >&2
-  pushd "${NEW_API_DATA_DIR}" >/dev/null
-  exec env PORT="${NEW_API_PORT}" "${NEW_API_BIN}"
+  if [[ -f "${NEW_API_DATA_DIR}/.env" ]] && [[ "${NEW_API_FORCE_SCRIPT_PORT:-}" != "1" ]]; then
+    echo "==> 前台启动 new-api，cwd ${NEW_API_DATA_DIR}（使用 .env；Ctrl+C 退出；不写 PID）" >&2
+    pushd "${NEW_API_DATA_DIR}" >/dev/null
+    exec env -u PORT "${NEW_API_BIN}"
+  else
+    echo "==> 前台启动 new-api，PORT=${NEW_API_PORT}，cwd ${NEW_API_DATA_DIR}（Ctrl+C 退出；不写 PID）" >&2
+    pushd "${NEW_API_DATA_DIR}" >/dev/null
+    exec env PORT="${NEW_API_PORT}" "${NEW_API_BIN}"
+  fi
 }
 
 cmd_stop() {
@@ -305,7 +336,8 @@ cmd_status() {
   pid="$(read_pid)"
   echo "NEW_API_SERVICE_HOME=${NEW_API_SERVICE_HOME}"
   echo "NEW_API_DATA_DIR=${NEW_API_DATA_DIR}"
-  echo "NEW_API_PORT=${NEW_API_PORT}"
+  echo "NEW_API_PORT=${NEW_API_PORT}（无 .env 或未解析时用；实际监听见下）"
+  echo "探测端口（.env 优先）: $(_new_api_effective_port)"
   if [[ -n "$pid" ]] && process_alive "$pid"; then
     echo "状态: 运行中 PID ${pid}"
   else
@@ -317,8 +349,8 @@ cmd_status() {
   fi
   if command -v curl >/dev/null 2>&1; then
     echo ""
-    echo "==> 探测 http://127.0.0.1:${NEW_API_PORT}/"
-    curl -sS -m 3 -o /dev/null -w "HTTP %{http_code}\n" "http://127.0.0.1:${NEW_API_PORT}/" || echo "（无法连接）"
+    echo "==> 探测 http://127.0.0.1:$(_new_api_effective_port)/"
+    curl -sS -m 3 -o /dev/null -w "HTTP %{http_code}\n" "http://127.0.0.1:$(_new_api_effective_port)/" || echo "（无法连接）"
   fi
 }
 
