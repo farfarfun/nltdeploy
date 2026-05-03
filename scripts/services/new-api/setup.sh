@@ -223,7 +223,7 @@ _download_install() {
   echo "==> 下载 new-api ${tag} → ${NEW_API_BIN}" >&2
   echo "    ${url}" >&2
   tmp="$(mktemp)"
-  trap 'rm -f "${tmp}"' RETURN
+  trap '[[ -n "${tmp-}" ]] && rm -f "${tmp}"' RETURN
   _nlt_github_download_print_accel_hint
   if declare -F nlt_pb_curl_to_file >/dev/null 2>&1; then
     NLT_PB_LABEL="new-api ${tag}" nlt_pb_curl_to_file "$url" "${tmp}" || die "下载失败: ${url}"
@@ -232,6 +232,8 @@ _download_install() {
   fi
   mkdir -p "${NEW_API_SERVICE_HOME}/bin"
   install -m 0755 "${tmp}" "${NEW_API_BIN}"
+  rm -f "${tmp}"
+  trap - RETURN
   [[ -x "${NEW_API_BIN}" ]] || die "安装后二进制不可执行: ${NEW_API_BIN}"
   echo "已安装 ${NEW_API_BIN}（${tag} / ${asset}）"
 }

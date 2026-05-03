@@ -143,7 +143,7 @@ _download_install() {
   echo "==> 下载 code-server v${ver} (${plat})" >&2
   echo "    ${url}" >&2
   tmpdir="$(mktemp -d)"
-  trap 'rm -rf "${tmpdir}"' RETURN
+  trap '[[ -n "${tmpdir-}" ]] && rm -rf "${tmpdir}"' RETURN
   _nlt_github_download_print_accel_hint
   if declare -F nlt_pb_curl_to_file >/dev/null 2>&1; then
     NLT_PB_LABEL="code-server v${ver}" nlt_pb_curl_to_file "$url" "${tmpdir}/code-server.tgz" || die "下载失败: ${url}"
@@ -153,6 +153,8 @@ _download_install() {
   rm -rf "${CODE_SERVER_SERVICE_HOME}/lib" "${CODE_SERVER_SERVICE_HOME}/bin" 2>/dev/null || true
   mkdir -p "${CODE_SERVER_SERVICE_HOME}"
   tar -xzf "${tmpdir}/code-server.tgz" -C "${CODE_SERVER_SERVICE_HOME}" --strip-components=1
+  rm -rf "${tmpdir}"
+  trap - RETURN
   [[ -x "${CODE_SERVER_BIN}" ]] || die "解压后未找到可执行文件: ${CODE_SERVER_BIN}"
   echo "已安装到 ${CODE_SERVER_SERVICE_HOME}（v${ver}）"
 }
